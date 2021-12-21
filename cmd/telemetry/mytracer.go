@@ -67,15 +67,20 @@ func main() {
 	nodeName := "node1"
 
 	carrier := make(map[string][]string)
-	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier)) // Extract 后，可以通过trace.SpanFromContext(ctx) 来获取Span
+	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier))
+	// Extract 后，可以通过trace.SpanFromContext(ctx) 来获取Span
+	//但是carrier.Get(traceparentHeader) 为空，返回原来的ctx
+	noonSpan := trace.SpanFromContext(ctx) //noonSpan.SpanContext()返回空的trace.SpanContext 结构
+	rsc := noonSpan.SpanContext()
+	log.Printf("noonSpan:%+v", rsc)
 
 	mytp := otel.GetTracerProvider()
-	tracer := mytp.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
+	tracer := mytp.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeper上效果 otel.library.name: myTracer-node1,
 	//tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
-	ctx, span := tracer.Start(ctx, nodeName)
-	//defer span.End()
+	ctx, span := tracer.Start(ctx, nodeName) //传入span name; 生成span 和携带span的ctx
+	defer span.End()
 	rootSpan := trace.SpanFromContext(ctx)
-	rsc := rootSpan.SpanContext()
+	rsc = rootSpan.SpanContext()
 	log.Printf("rootSpan:%+v", rsc)
 
 	otel.GetTextMapPropagator().Inject(ctx,
@@ -103,8 +108,7 @@ func main() {
 	wg.Wait()
 	//模拟network delay
 	time.Sleep(time.Millisecond * 100)
-	span.End()
-	time.Sleep(time.Second)
+
 }
 
 func node(nodeName string, c map[string][]string) {
