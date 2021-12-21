@@ -83,6 +83,13 @@ func main() {
 	rsc = rootSpan.SpanContext()
 	log.Printf("rootSpan:%+v", rsc)
 
+	//检查span ,跟ctx的span 是否一样
+	if span == rootSpan {
+		log.Printf("span == rootSpan \n")
+	} else {
+		log.Fatal("span != rootSpan ")
+	}
+
 	otel.GetTextMapPropagator().Inject(ctx,
 		propagation.HeaderCarrier(carrier),
 	)
