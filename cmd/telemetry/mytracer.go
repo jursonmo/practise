@@ -76,9 +76,13 @@ func main() {
 
 	mytp := otel.GetTracerProvider()
 	tracer := mytp.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeper上效果 otel.library.name: myTracer-node1,
-	//tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
+	//tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //可代替上面两条语句。
+
+	//go.opentelemetry.io/otel/sdk@v1.2.0/trace/tracer.go
 	ctx, span := tracer.Start(ctx, nodeName) //传入span name; 生成span 和携带span的ctx
 	defer span.End()
+
+	//rsc = trace.SpanContextFromContext(ctx) //直接从ctx 提取SpanContext
 	rootSpan := trace.SpanFromContext(ctx)
 	rsc = rootSpan.SpanContext()
 	log.Printf("%s, rootSpan:%+v", nodeName, rsc)
@@ -91,6 +95,7 @@ func main() {
 	}
 
 	// 将关于本地追踪调用的span context，设置到carrier(可以是http header)上，并传递出去
+	// as trace.SpanKindClient, inject to carrier
 	otel.GetTextMapPropagator().Inject(ctx,
 		propagation.HeaderCarrier(carrier),
 	)
@@ -129,6 +134,8 @@ func node(nodeName string, c map[string][]string) {
 	}
 
 	ctx := context.Background()
+	//as trace.SpanKindServer, Extract from carrier and generate new ctx with remote span
+	//Extract will return trace.ContextWithRemoteSpanContext(ctx, sc)
 	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier)) //carrier有trace信息，Extract则生成一个remote==true的SpanContext
 
 	fromSpan := trace.SpanFromContext(ctx)
@@ -139,7 +146,7 @@ func node(nodeName string, c map[string][]string) {
 	//tracer := tp.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
 	//如果是相同的名称，那么得到同一个Tracer,会有啥影响
 	tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeper上效果 otel.library.name: myTracer-node2,
-	ctx, span := tracer.Start(ctx, nodeName)                    //传入span name
+	ctx, span := tracer.Start(ctx, nodeName)                    //传入span name;在parent traceID的情况下生成新SpanID
 	span.SetAttributes(attribute.Key("testset").String("value"))
 	time.Sleep(time.Millisecond * 50)
 	span.SetName(nodeName + "spanName") //这里可以重新设置span name
