@@ -69,7 +69,7 @@ func main() {
 	carrier := make(map[string][]string)
 	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier))
 	// Extract 后，可以通过trace.SpanFromContext(ctx) 来获取Span
-	//但是carrier.Get(traceparentHeader) 为空，返回原来的ctx
+	//但是carrier.Get(traceparentHeader) 为空，返回原来的ctx。 如果有则生成一个remote==true的SpanContext
 	noonSpan := trace.SpanFromContext(ctx) //noonSpan.SpanContext()返回空的trace.SpanContext 结构
 	rsc := noonSpan.SpanContext()
 	log.Printf("noonSpan:%+v", rsc)
@@ -81,7 +81,7 @@ func main() {
 	defer span.End()
 	rootSpan := trace.SpanFromContext(ctx)
 	rsc = rootSpan.SpanContext()
-	log.Printf("rootSpan:%+v", rsc)
+	log.Printf("%s, rootSpan:%+v", nodeName, rsc)
 
 	//检查span ,跟ctx的span 是否一样
 	if span == rootSpan {
@@ -90,6 +90,7 @@ func main() {
 		log.Fatal("span != rootSpan ")
 	}
 
+	// 将关于本地追踪调用的span context，设置到carrier(可以是http header)上，并传递出去
 	otel.GetTextMapPropagator().Inject(ctx,
 		propagation.HeaderCarrier(carrier),
 	)
@@ -100,6 +101,7 @@ func main() {
 	//模拟network delay
 	time.Sleep(time.Millisecond * 100)
 
+	//模拟异步调用两个下游服务
 	//node2:
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -119,14 +121,19 @@ func main() {
 }
 
 func node(nodeName string, c map[string][]string) {
-	log.Printf("calling %s\n", nodeName)
-	carrier := c //get carrier from node1
+	log.Printf("calling %s services\n", nodeName)
+	carrier := make(map[string][]string)
+	//get carrier from parent node
+	for k, v := range c {
+		carrier[k] = v
+	}
+
 	ctx := context.Background()
-	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier))
+	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier)) //carrier有trace信息，Extract则生成一个remote==true的SpanContext
 
 	fromSpan := trace.SpanFromContext(ctx)
 	fsc := fromSpan.SpanContext()
-	log.Printf("fromSpan:%+v", fsc)
+	log.Printf("parent Span from remote:%+v", fsc)
 
 	//tp := otel.GetTracerProvider()
 	//tracer := tp.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
@@ -140,16 +147,18 @@ func node(nodeName string, c map[string][]string) {
 
 	//打印span 信息，包含 traceID spanID
 	sc := span.SpanContext()
-	log.Printf("%+v", sc)
+	log.Printf("%s current spanContext:%+v\n", nodeName, sc)
 
 	//打印 traceID spanID，traceID 都一样，span id 是不一样的
 	otel.GetTextMapPropagator().Inject(ctx,
 		propagation.HeaderCarrier(carrier),
 	)
-	fmt.Printf("node:%s, carrier:%v\n", nodeName, carrier)
+	fmt.Printf("node:%s, inject carrier:%v\n", nodeName, carrier)
 
+	//模拟调用集群内其他子服务的延迟
 	time.Sleep(time.Millisecond * 50)
-	ctx, childSpan := tracer.Start(ctx, nodeName+"-1")
+	ctx, childSpan := tracer.Start(ctx, nodeName+"sub1")
+	//模拟子服务处理花费的时间
 	time.Sleep(time.Millisecond * 50)
 	childSpan.End()
 }
