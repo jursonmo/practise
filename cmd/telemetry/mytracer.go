@@ -27,15 +27,15 @@ func tracerProvider(url string) (*tracesdk.TracerProvider, error) {
 		return nil, err
 	}
 	tp := tracesdk.NewTracerProvider(
-		tracesdk.WithSampler(tracesdk.AlwaysSample()),
+		//tracesdk.WithSampler(tracesdk.AlwaysSample()),
 		// Always be sure to batch in production.
 		tracesdk.WithBatcher(exp),
 		// Record information about this application in an Resource.
 		tracesdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String("mytracer-service"),
-			attribute.String("environment", "development"),
-			attribute.Int64("ID", 1),
+			attribute.String("environment", "development"), //jaeger Process显示
+			attribute.Int64("ID", 1),                       //jaeger Process显示
 		)),
 	)
 	return tp, nil
@@ -75,11 +75,13 @@ func main() {
 	log.Printf("noonSpan:%+v", rsc)
 
 	mytp := otel.GetTracerProvider()
-	tracer := mytp.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeper上效果 otel.library.name: myTracer-node1,
+	tracer := mytp.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeger上效果tags: otel.library.name: myTracer-node1,
 	//tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //可代替上面两条语句。
 
 	//go.opentelemetry.io/otel/sdk@v1.2.0/trace/tracer.go
 	ctx, span := tracer.Start(ctx, nodeName) //传入span name; 生成span 和携带span的ctx
+
+	span.AddEvent("testAddEvent", trace.WithAttributes(attribute.String("eventKey", "eventValue"))) //jaeger显示为Logs: evnet=testAddEvent, eventKey=eventValue
 	defer span.End()
 
 	//rsc = trace.SpanContextFromContext(ctx) //直接从ctx 提取SpanContext
@@ -101,7 +103,7 @@ func main() {
 	)
 	//go.opentelemetry.io/otel@v1.2.0/propagation/trace_context.go
 	//carrier 格式为 %.2x-%s-%s-%s:supportedVersion-TraceID-SpanID-flags
-	fmt.Printf("node:%s, carrier:%v\n", nodeName, carrier)
+	fmt.Printf("node:%s, inject carrier:%v\n", nodeName, carrier)
 
 	//模拟network delay
 	time.Sleep(time.Millisecond * 100)
@@ -145,9 +147,9 @@ func node(nodeName string, c map[string][]string) {
 	//tp := otel.GetTracerProvider()
 	//tracer := tp.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
 	//如果是相同的名称，那么得到同一个Tracer,会有啥影响
-	tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //jaeper上效果 otel.library.name: myTracer-node2,
-	ctx, span := tracer.Start(ctx, nodeName)                    //传入span name;在parent traceID的情况下生成新SpanID
-	span.SetAttributes(attribute.Key("testset").String("value"))
+	tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName))  //jaeger上效果tags: otel.library.name: myTracer-node2,
+	ctx, span := tracer.Start(ctx, nodeName)                     //传入span name;在parent traceID的情况下生成新SpanID
+	span.SetAttributes(attribute.Key("testset").String("value")) //jaeger上效果tags: testset=value
 	time.Sleep(time.Millisecond * 50)
 	span.SetName(nodeName + "spanName") //这里可以重新设置span name
 	span.End()
