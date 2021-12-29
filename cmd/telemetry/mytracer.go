@@ -33,9 +33,9 @@ func tracerProvider(url string) (*tracesdk.TracerProvider, error) {
 		// Record information about this application in an Resource.
 		tracesdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("mytracer-service"),
-			attribute.String("environment", "development"), //jaeger Process显示
-			attribute.Int64("ID", 1),                       //jaeger Process显示
+			semconv.ServiceNameKey.String("mytracer-service"), //es process.serviceName="mytracer-service"
+			attribute.String("environment", "development"),    //jaeger Process显示
+			attribute.Int64("ID", 1),                          //jaeger Process显示
 		)),
 	)
 	return tp, nil
@@ -79,7 +79,7 @@ func main() {
 	//tracer := otel.Tracer(fmt.Sprintf("myTracer-%s", nodeName)) //可代替上面两条语句。
 
 	//go.opentelemetry.io/otel/sdk@v1.2.0/trace/tracer.go
-	ctx, span := tracer.Start(ctx, nodeName) //传入span name; 生成span 和携带span的ctx
+	ctx, span := tracer.Start(ctx, nodeName) //传入span name; 生成span 和携带span的ctx; es operationName=node1
 
 	span.AddEvent("testAddEvent", trace.WithAttributes(attribute.String("eventKey", "eventValue"))) //jaeger显示为Logs: evnet=testAddEvent, eventKey=eventValue
 	defer span.End()
@@ -171,3 +171,86 @@ func node(nodeName string, c map[string][]string) {
 	time.Sleep(time.Millisecond * 50)
 	childSpan.End()
 }
+
+/* --------es----------
+
+_id
+r7HT8H0BWfcfyQID6_Tg
+
+_index
+jaeger-span-2021-12-25
+
+_score
+ -
+
+_type
+_doc
+
+duration
+359,455
+
+flags
+1
+
+logs
+
+{
+  "fields": [
+    {
+      "type": [
+        "string"
+      ],
+      "value": [
+        "testAddEvent"
+      ],
+      "key": [
+        "event"
+      ]
+    },
+    {
+      "type": [
+        "string"
+      ],
+      "value": [
+        "eventValue"
+      ],
+      "key": [
+        "eventKey"
+      ]
+    }
+  ],
+  "timestamp": [
+    1640422953358130
+  ]
+}
+
+operationName
+node1
+
+process.serviceName
+mytracer-service
+
+process.tag.environment
+development
+
+process.tag.ID
+1
+
+spanID
+f5af296c76e76895
+
+startTime
+1,640,422,953,358,081
+
+startTimeMillis
+Dec 25, 2021 @ 17:02:33.358
+
+tag.internal@span@format
+jaeger
+
+tag.otel@library@name
+myTracer-node1
+
+traceID
+0606134956bbb054bdfd5d0fe395eb84
+*/
