@@ -9,9 +9,11 @@ require (
 	github.com/brucespang/go-tcpinfo v0.2.0 // indirect
 	github.com/containernetworking/cni v1.0.1
 	github.com/containernetworking/plugins v1.0.2-0.20211006153910-f1f128e3c922
+	github.com/go-mods/zerolog-rotate v1.0.2 // indirect
 	github.com/google/gops v0.3.22
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/memberlist v0.2.0
+	github.com/iancoleman/strcase v0.2.0 // indirect
 	github.com/influxdata/influxdb v1.9.5 // indirect
 	github.com/influxdata/influxdb-client-go/v2 v2.5.1
 	github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d
@@ -20,6 +22,7 @@ require (
 	github.com/networkop/xdp-xconnect v0.0.0-20210308194118-1e1a8482c3bc
 	github.com/pborman/uuid v1.2.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
+	github.com/rs/zerolog v1.26.1 // indirect
 	github.com/tal-tech/go-queue v1.0.7
 	github.com/tevjef/go-runtime-metrics v0.0.0-20170326170900-527a54029307
 	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
