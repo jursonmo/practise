@@ -1,0 +1,7 @@
+{"level":"info","ts":"2022-04-27T15:32:17+08:00","caller":"zaplog/product.go:18","msg":"hello world"}
+{"level":"info","ts":"2022-04-27T15:32:33+08:00","caller":"zaplog/product.go:18","msg":"hello world"}
+{"level":"info","ts":"2022-04-27T15:33:16+08:00","caller":"zaplog/product.go:19","msg":"hello world"}
+{"level":"info","ts":"2022-04-27T15:34:22+08:00","caller":"zaplog/product.go:20","msg":"hello world"}
+{"level":"info","ts":"2022-04-27T15:34:31+08:00","caller":"zaplog/product.go:20","msg":"hello world"}
+{"level":"info","ts":"2022-04-27T15:35:22+08:00","caller":"zaplog/product.go:20","msg":"hello world"}
+{"lv":"info","ts":"2022-04-27T15:49:26+08:00","c":"zaplog/product.go:34","msg":"hello world"}
