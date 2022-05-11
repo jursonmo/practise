@@ -10,6 +10,7 @@ import (
 	"github.com/tal-tech/go-zero/core/fx"
 )
 
+//https://cloud.tencent.com/developer/news/706105
 func main() {
 	ch := make(chan int)
 
@@ -19,6 +20,10 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	<-c
+
+	fx.Just(1, 2, 3, 4, 5).Reverse().ForEach(func(item interface{}) {
+		fmt.Println(item)
+	})
 }
 
 func inputStream(ch chan int) {
