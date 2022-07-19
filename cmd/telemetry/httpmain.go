@@ -59,8 +59,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("开始请求...\n"))
 
-	ctx := r.Context()
-	span := trace.SpanFromContext(ctx)
+	ctx := r.Context()                 //经过otelhttp.NewHandler的处理，这个ctx 是包含otelhttp.NewHandler新生成的span信息
+	span := trace.SpanFromContext(ctx) //这里还做span.End 不是跟otelhttp.NewHandler 的span.End() 重复了吗
 	defer span.End()
 
 	// 发起异步请求
@@ -72,6 +72,23 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	go func() {
 		if _, err := http.DefaultClient.Do(asyncReq); err != nil {
+			span.RecordError(err)
+			span.SetAttributes(
+				attribute.String("请求 /async error", err.Error()),
+			)
+		}
+	}()
+
+	//更加简洁的做法是使用otelhttp.NewTransport, 侵入性低
+	go func() {
+		asyncReq = asyncReq.WithContext(ctx) // 让asyncReq带上ctx, 把这个ctx 传给otelhttp.NewTransport 的RoundTrip
+
+		//其实可以用otelhttp.NewTransport 封装的transport 来请求http request
+		//wrapTransport 在调用RoundTrip 时,会从asyncReq 读到带有父span的ctx，从而自动创建新的子span,
+		wrapTransport := otelhttp.NewTransport(http.DefaultTransport)
+		client := http.Client{Transport: wrapTransport}
+
+		if _, err := client.Do(asyncReq); err != nil {
 			span.RecordError(err)
 			span.SetAttributes(
 				attribute.String("请求 /async error", err.Error()),
@@ -102,6 +119,9 @@ func serviceHandler(w http.ResponseWriter, r *http.Request) {
 		otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header)),
 	)
 	defer span.End()
+	//其实不需要从r.Header 提取trace 信息，因为otelhttp.NewHandle()已经做这个事情，只需要
+	// ctx := r.Context()
+	// span := trace.SpanFromContext(ctx) 就可以得到span
 
 	dbReq, _ := http.NewRequest("GET", "http://localhost:8080/db", nil)
 	otel.GetTextMapPropagator().Inject(r.Context(), propagation.HeaderCarrier(dbReq.Header))
@@ -122,6 +142,9 @@ func dbHandler(w http.ResponseWriter, r *http.Request) {
 		otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header)),
 	)
 	defer span.End()
+	//其实不需要从r.Header 提取trace 信息，因为otelhttp.NewHandle()已经做这个事情，只需要
+	// ctx := r.Context()
+	// span := trace.SpanFromContext(ctx) 就可以得到span
 
 	time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
 }
