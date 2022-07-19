@@ -95,6 +95,12 @@ func main() {
 	} else {
 		log.Fatal("span != rootSpan ")
 	}
+	spantp := span.TracerProvider()
+	if mytp == spantp {
+		log.Printf("mytp == spantp \n")
+	} else {
+		log.Printf("mytp != spantp \n")
+	}
 
 	// 将关于本地追踪调用的span context，设置到carrier(可以是http header)上，并传递出去
 	// as trace.SpanKindClient, inject to carrier
@@ -142,6 +148,9 @@ func node(nodeName string, c map[string][]string) {
 
 	fromSpan := trace.SpanFromContext(ctx)
 	fsc := fromSpan.SpanContext()
+	if !fsc.IsValid() {
+		log.Printf("parent Span from remote is in Valid:%+v", fsc)
+	}
 	log.Printf("parent Span from remote:%+v", fsc)
 
 	//tp := otel.GetTracerProvider()
@@ -177,6 +186,7 @@ MBP:telemetry obc$ ./mytracer
 2022/03/08 18:47:54 noonSpan:{traceID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] spanID:[0 0 0 0 0 0 0 0] traceFlags:0 traceState:{list:[]} remote:false}
 2022/03/08 18:47:54 node1, rootSpan:{traceID:[154 38 168 238 136 39 112 138 198 153 147 204 151 29 82 168] spanID:[115 159 68 94 191 83 112 151] traceFlags:1 traceState:{list:[]} remote:false}
 2022/03/08 18:47:54 span == rootSpan
+2022/03/08 18:47:54 mytp == spantp
 node:node1, inject carrier:map[Traceparent:[00-9a26a8ee8827708ac69993cc971d52a8-739f445ebf537097-01]]
 2022/03/08 18:47:54 calling node3 services
 2022/03/08 18:47:54 calling node2 services
