@@ -65,11 +65,12 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 
 	st.resultHandlers = resultHandlers
 	st.taskCtx, st.taskCancel = witchCancelResult(st.ctx)
-	go func() {
-		result := f(st.taskCtx)
+	//用参数传入st.taskCtx, 确保goroutine func 运行时，f 用的是当前指定的st.taskCtx, 如果是闭包，有可能f 用的是后来新创建st.taskCtx
+	go func(ctx context.Context) {
+		result := f(ctx)
 		//put result
-		putTaskResult(st.taskCtx, result)
-	}()
+		putTaskResult(ctx, result)
+	}(st.taskCtx)
 
 	return nil
 }
