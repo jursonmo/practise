@@ -61,6 +61,26 @@ func TestSingleTask(t *testing.T) {
 		t.Fatal("expect err when putting  new Task to the closed singletask ")
 	}
 }
+func TestCloseAndWait(t *testing.T) {
+	var err error
+	ctx, _ := context.WithCancel(context.Background())
+	st := New(ctx)
+
+	taskOver := false
+	myTask := func(ctx context.Context) error {
+		defer func() { taskOver = true }()
+		time.Sleep(time.Second * 2)
+		return nil
+	}
+	err = st.PutTask(myTask)
+	if err != nil {
+		t.Fatalf("put task, unexpect")
+	}
+	st.CloseAndWait()
+	if !taskOver {
+		t.Fatalf("CloseAndWait don't wait mytask finish")
+	}
+}
 
 /*
 func myTask(ctx context.Context) error {

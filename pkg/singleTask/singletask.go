@@ -40,6 +40,16 @@ func (st *SingleTask) Close() {
 	}
 }
 
+//close singetask and wait task quit
+func (st *SingleTask) CloseAndWait() {
+	st.Lock()
+	defer st.Unlock()
+	if st.cancel != nil {
+		st.cancel()
+		st.CancelTask()
+	}
+}
+
 func (st *SingleTask) CancelTask() {
 	if st.taskCancel != nil {
 		st.taskCancel()
