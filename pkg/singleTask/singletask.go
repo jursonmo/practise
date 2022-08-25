@@ -13,8 +13,9 @@ const (
 
 type SingleTask struct {
 	sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx      context.Context
+	cancel   context.CancelFunc
+	resultCh chan interface{}
 
 	taskCtx        context.Context
 	taskCancel     context.CancelFunc
@@ -22,12 +23,13 @@ type SingleTask struct {
 }
 
 //type TaskFunc func(context.Context) interface{}
+//type TaskFunc func(ctx context.Context, args ...interface{}) error
 type TaskFunc func(context.Context) error
 type TaskResultHandler func(interface{})
 
 func New(ctx context.Context) *SingleTask {
 	ctx, cancel := context.WithCancel(ctx)
-	return &SingleTask{ctx: ctx, cancel: cancel}
+	return &SingleTask{ctx: ctx, cancel: cancel, resultCh: make(chan interface{}, 1)}
 }
 
 func (st *SingleTask) Close() {
@@ -64,7 +66,7 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 	st.CancelTask()
 
 	st.resultHandlers = resultHandlers
-	st.taskCtx, st.taskCancel = witchCancelResult(st.ctx)
+	st.taskCtx, st.taskCancel = witchCancelResult(st.ctx, st.resultCh)
 	//用参数传入st.taskCtx, 确保goroutine func 运行时，f 用的是当前指定的st.taskCtx, 如果是闭包，有可能f 用的是后来新创建st.taskCtx
 	go func(ctx context.Context) {
 		result := f(ctx)
@@ -75,9 +77,10 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 	return nil
 }
 
-func witchCancelResult(ctx context.Context) (context.Context, context.CancelFunc) {
+func witchCancelResult(ctx context.Context, resultCh chan interface{}) (context.Context, context.CancelFunc) {
 	nctx, cancel := context.WithCancel(ctx)
-	nctx = context.WithValue(nctx, resultKey, make(chan interface{}, 1))
+	//nctx = context.WithValue(nctx, resultKey, make(chan interface{}, 1))
+	nctx = context.WithValue(nctx, resultKey, resultCh)
 	return nctx, cancel
 }
 
