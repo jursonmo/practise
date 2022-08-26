@@ -3,6 +3,7 @@ package singletask
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // singletask make sure there is only one task on working at once
@@ -20,6 +21,8 @@ type SingleTask struct {
 	taskCtx        context.Context
 	taskCancel     context.CancelFunc
 	resultHandlers []TaskResultHandler
+
+	mustSuccess *MustSuccess
 }
 
 //type TaskFunc func(context.Context) interface{}
@@ -63,7 +66,27 @@ func (st *SingleTask) CancelTask() {
 	}
 }
 
+// resultHandlers will be invoked each time when f return
 func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {
+	return st.putTask(f, resultHandlers...)
+}
+
+//PutTaskMustSuccess: if f return a non-nil err, means f fail, will retry
+//intvl: call f interval time at least
+//resultHandlers will be invoked each time when f return
+func (st *SingleTask) PutTaskMustSuccess(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
+	mustSuccessFunc := func(ctx context.Context) error {
+		if st.mustSuccess != nil {
+			st.mustSuccess.Reset(ctx, intvl)
+		} else {
+			st.mustSuccess = NewMustSuccess(ctx, intvl, ContextErrs())
+		}
+		return st.mustSuccess.Call(f, resultHandlers...)
+	}
+	return st.putTask(mustSuccessFunc)
+}
+
+func (st *SingleTask) putTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {
 	st.Lock()
 	defer st.Unlock()
 

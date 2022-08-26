@@ -74,7 +74,7 @@ func TestCloseAndWait(t *testing.T) {
 	}
 	err = st.PutTask(myTask)
 	if err != nil {
-		t.Fatalf("put task, unexpect")
+		t.Fatalf("put task err, unexpect")
 	}
 	st.CloseAndWait()
 	if !taskOver {
@@ -82,31 +82,38 @@ func TestCloseAndWait(t *testing.T) {
 	}
 }
 
-/*
-func myTask(ctx context.Context) error {
-	defer atomic.AddInt32(&taskCounter, -1)
-	new := atomic.AddInt32(&taskCounter, 1)
-	if new > 1 {
-		err := fmt.Errorf("there is too many task on working, expect only on task")
-		panic(err)
-		return err
-	}
-	timer := time.NewTimer(time.Second * 1)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		fmt.Println("work time over")
-		return nil
-	case <-ctx.Done():
-		fmt.Printf("cancel?:%v\n", ctx.Err())
-		return nil
-	}
-	return nil
-}
+func TestPutTaskMustSuccess(t *testing.T) {
+	var err error
+	ctx, _ := context.WithCancel(context.Background())
+	st := New(ctx)
 
-func myTaskFail(result interface{}) {
-	if err, ok := result.(error); ok {
-		t.Fatal(err)
+	myTaskCall := 0
+	needCall := 3
+	myTask := func(ctx context.Context) error {
+		myTaskCall++
+		//simulate do some work
+		time.Sleep(time.Millisecond * 100)
+		t.Logf("myTask call:%d", myTaskCall)
+		if myTaskCall < needCall {
+			//return err, means myTask executed fail, will be try again
+			return fmt.Errorf("fail,try again")
+		}
+		//return nil means myTask executed successfully, don't try again
+		return nil
+	}
+	myTaskResultHandler := func(result interface{}) {
+		if err, ok := result.(error); ok {
+			t.Log(err)
+		}
+	}
+
+	err = st.PutTaskMustSuccess(myTask, time.Millisecond*100, myTaskResultHandler)
+	if err != nil {
+		t.Fatalf("put task err, unexpect")
+	}
+
+	time.Sleep(time.Second)
+	if myTaskCall != needCall {
+		t.Fatalf("myTaskCall != needCall")
 	}
 }
-*/
