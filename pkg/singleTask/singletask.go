@@ -81,7 +81,7 @@ func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHand
 		} else {
 			st.promise = NewPromise(ctx, intvl, ContextErrs())
 		}
-		return st.promise.Call(f, resultHandlers...)
+		return st.promise.Call(f, resultHandlers...).Error()
 	}
 	return st.putTask(promiseFunc)
 }

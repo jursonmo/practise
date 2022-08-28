@@ -25,13 +25,14 @@ func NewPromise(ctx context.Context, intvl time.Duration, errs []error) *Promise
 	return &Promise{ctx: ctx, intvl: intvl, quitErrs: errs}
 }
 
-func (ms *Promise) Call(f func(context.Context) error, resultHandlers ...TaskResultHandler) error {
+func (ms *Promise) Call(f func(context.Context) error, resultHandlers ...TaskResultHandler) *Promise {
 	if ms.Error() != nil {
-		return ms.Error()
+		return ms
 	}
 	for {
 		if err := ms.ctx.Err(); err != nil {
-			return err
+			ms.err = err
+			return ms
 		}
 		start := time.Now()
 		err := f(ms.ctx)
@@ -39,13 +40,13 @@ func (ms *Promise) Call(f func(context.Context) error, resultHandlers ...TaskRes
 			handler(err)
 		}
 		if err == nil {
-			return nil
+			return ms
 		}
 
 		for _, quitErr := range ms.quitErrs {
 			if errors.Is(err, quitErr) {
 				ms.err = err
-				return ms.err
+				return ms
 			}
 		}
 		DelayCtx(ms.ctx, start, ms.intvl)
