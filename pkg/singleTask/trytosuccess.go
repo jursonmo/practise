@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type MustSuccess struct {
+type Promise struct {
 	ctx context.Context
 	err error
 
@@ -19,13 +19,13 @@ func ContextErrs() []error {
 	return []error{context.Canceled, context.DeadlineExceeded}
 }
 
-var DefMustSuccess = NewMustSuccess(context.Background(), time.Second*5, ContextErrs())
+var DefPromise = NewPromise(context.Background(), time.Second*5, ContextErrs())
 
-func NewMustSuccess(ctx context.Context, intvl time.Duration, errs []error) *MustSuccess {
-	return &MustSuccess{ctx: ctx, intvl: intvl, quitErrs: errs}
+func NewPromise(ctx context.Context, intvl time.Duration, errs []error) *Promise {
+	return &Promise{ctx: ctx, intvl: intvl, quitErrs: errs}
 }
 
-func (ms *MustSuccess) Call(f func(context.Context) error, resultHandlers ...TaskResultHandler) error {
+func (ms *Promise) Call(f func(context.Context) error, resultHandlers ...TaskResultHandler) error {
 	if ms.Error() != nil {
 		return ms.Error()
 	}
@@ -52,11 +52,11 @@ func (ms *MustSuccess) Call(f func(context.Context) error, resultHandlers ...Tas
 	}
 }
 
-func (ms *MustSuccess) Error() error {
+func (ms *Promise) Error() error {
 	return ms.err
 }
 
-func (ms *MustSuccess) Reset(ctx context.Context, intvl time.Duration) {
+func (ms *Promise) Reset(ctx context.Context, intvl time.Duration) {
 	ms.ctx = ctx
 	ms.intvl = intvl
 	ms.err = nil

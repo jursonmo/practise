@@ -82,7 +82,7 @@ func TestCloseAndWait(t *testing.T) {
 	}
 }
 
-func TestPutTaskMustSuccess(t *testing.T) {
+func TestPutTaskPromise(t *testing.T) {
 	var err error
 	ctx, _ := context.WithCancel(context.Background())
 	st := New(ctx)
@@ -107,7 +107,7 @@ func TestPutTaskMustSuccess(t *testing.T) {
 		}
 	}
 
-	err = st.PutTaskMustSuccess(myTask, time.Millisecond*100, myTaskResultHandler)
+	err = st.PutTaskPromise(myTask, time.Millisecond*100, myTaskResultHandler)
 	if err != nil {
 		t.Fatalf("put task err, unexpect")
 	}

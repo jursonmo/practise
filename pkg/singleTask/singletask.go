@@ -22,7 +22,7 @@ type SingleTask struct {
 	taskCancel     context.CancelFunc
 	resultHandlers []TaskResultHandler
 
-	mustSuccess *MustSuccess
+	promise *Promise
 }
 
 //type TaskFunc func(context.Context) interface{}
@@ -71,19 +71,19 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 	return st.putTask(f, resultHandlers...)
 }
 
-//PutTaskMustSuccess: if f return a non-nil err, means f fail, will retry
+//PutTaskPromise: if f return a non-nil err, means f fail, will retry
 //intvl: call f interval time at least
 //resultHandlers will be invoked each time when f return
-func (st *SingleTask) PutTaskMustSuccess(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
-	mustSuccessFunc := func(ctx context.Context) error {
-		if st.mustSuccess != nil {
-			st.mustSuccess.Reset(ctx, intvl)
+func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
+	promiseFunc := func(ctx context.Context) error {
+		if st.promise != nil {
+			st.promise.Reset(ctx, intvl)
 		} else {
-			st.mustSuccess = NewMustSuccess(ctx, intvl, ContextErrs())
+			st.promise = NewPromise(ctx, intvl, ContextErrs())
 		}
-		return st.mustSuccess.Call(f, resultHandlers...)
+		return st.promise.Call(f, resultHandlers...)
 	}
-	return st.putTask(mustSuccessFunc)
+	return st.putTask(promiseFunc)
 }
 
 func (st *SingleTask) putTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {
