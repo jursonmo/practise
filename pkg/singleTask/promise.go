@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+//promise: will call f loop until f return nil or ctx canceled
 type Promise struct {
 	ctx context.Context
 	err error
