@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	//client 得到response 跟服务器的处理有关， 先回复，client 就先拿到response
+	//client 得到response 跟服务器的处理有关， 先回复，client 就先拿到response， 原因是底层tcp 不止一个
 	// 结论是服务器先数据的顺序跟 client 请求的顺序不一样的
 	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:1313/sleep",
@@ -80,15 +80,6 @@ func main() {
 	wg.Wait()
 }
 func request(client *http.Client, req *http.Request) {
-	// type reqData struct {
-	// 	Sleep string
-	// }
-	// reqdata := &reqData{Sleep: s}
-	// data, err := json.Marshal(reqdata)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 	resp, err := client.Do(req)
 	if err != nil {
 		panic(err)
