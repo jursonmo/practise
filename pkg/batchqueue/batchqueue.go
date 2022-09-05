@@ -6,12 +6,29 @@ import (
 	"sync"
 )
 
-//github.com/segmentio/kafka-go@v0.4.32/writer.go
-type batchQueue struct {
+type BatchQueue = batchQueue
+type BqOptions struct {
 	name string
-	rb   *RingBuffer
-	//queue []interface{}
+	roll bool
+}
+type BqOption func(*BqOptions)
 
+func WithName(name string) BqOption {
+	return func(o *BqOptions) {
+		o.name = name
+	}
+}
+func WithRoll(roll bool) BqOption {
+	return func(o *BqOptions) {
+		o.roll = roll
+	}
+}
+
+//借鉴github.com/segmentio/kafka-go@v0.4.32/writer.go 但是它会分配新的内存块
+type batchQueue struct {
+	rb *RingBuffer
+	//queue []interface{}
+	option BqOptions
 	// Pointers are used here to make `go vet` happy, and avoid copying mutexes.
 	// It may be better to revert these to non-pointers and avoid the copies in
 	// a different way.
@@ -26,17 +43,18 @@ var (
 	errClose = errors.New("closed")
 )
 
-func NewBatchQueue(initialSize int, name string) batchQueue {
-	bq := batchQueue{
-		name: name,
+func NewBatchQueue(initialSize int, opts ...BqOption) *batchQueue {
+	bq := &batchQueue{
 		//queue: make([]interface{}, 0, initialSize),
 		rb:    New(initialSize, WithoutMutex(true)),
 		mutex: &sync.Mutex{},
 		cond:  &sync.Cond{},
 	}
-
 	bq.cond.L = bq.mutex
 
+	for _, opt := range opts {
+		opt(&bq.option)
+	}
 	return bq
 }
 
@@ -51,6 +69,23 @@ func (b *batchQueue) Put(batch ...interface{}) (int, error) {
 	}
 	//b.queue = append(b.queue, batch)
 	n, _ := b.rb.Write(batch)
+	return n, nil
+}
+
+//it will replace oldest data when there is no enough space to write
+func (b *batchQueue) PutRoll(batch ...interface{}) (int, error) {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	defer b.cond.Broadcast()
+
+	if b.closed {
+		return 0, b.closeErr
+	}
+
+	n, err := b.rb.WriteRoll(batch)
+	if err == ErrOverCapacity {
+		return n, err
+	}
 	return n, nil
 }
 
@@ -126,5 +161,5 @@ func (b *batchQueue) Close() {
 	defer b.cond.Broadcast()
 
 	b.closed = true
-	b.closeErr = fmt.Errorf("%s:%w", b.name, errClose)
+	b.closeErr = fmt.Errorf("%s:%w", b.option.name, errClose)
 }

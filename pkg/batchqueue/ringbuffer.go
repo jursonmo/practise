@@ -1,6 +1,10 @@
 package batchqueue
 
-import "errors"
+import (
+	"errors"
+	"log"
+	"sync"
+)
 
 //https://github.com/smallnest/ringbuffer/blob/master/ring_buffer.go
 var (
@@ -8,6 +12,7 @@ var (
 	ErrIsFull             = errors.New("ringbuffer is full")
 	ErrIsEmpty            = errors.New("ringbuffer is empty")
 	ErrAccuqireLock       = errors.New("no lock to accquire")
+	ErrOverCapacity       = errors.New("Over Capacity")
 )
 
 type RingBuffer struct {
@@ -42,6 +47,11 @@ func New(size int, opts ...Option) *RingBuffer {
 	if o.withoutMutex {
 		rb.mu = &NonMutex{}
 	}
+
+	//if mu unset, default sync.Mutex
+	if rb.mu == nil {
+		rb.mu = new(sync.Mutex)
+	}
 	return rb
 }
 
@@ -69,6 +79,12 @@ func (r *RingBuffer) Read(p []interface{}) (n int, err error) {
 }
 
 func (r *RingBuffer) Buffered() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.buffered()
+}
+
+func (r *RingBuffer) buffered() int {
 	if r.w == r.r && !r.isFull {
 		return 0
 	}
@@ -76,6 +92,41 @@ func (r *RingBuffer) Buffered() int {
 		return r.w - r.r
 	}
 	return r.size - r.r + r.w
+}
+
+func (r *RingBuffer) free() int {
+	return r.size - r.buffered()
+}
+
+func (r *RingBuffer) Discard(dn int) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.discard(dn)
+}
+
+func (r *RingBuffer) discard(dn int) (n int, err error) {
+	if dn == 0 {
+		return
+	}
+	if r.w == r.r && !r.isFull {
+		return 0, ErrIsEmpty
+	}
+	if r.w > r.r {
+		n = r.w - r.r
+		if n > dn {
+			n = dn
+		}
+		r.r = (r.r + n) % r.size
+		return
+	}
+
+	n = r.size - r.r + r.w
+	if n > dn {
+		n = dn
+	}
+	r.r = (r.r + n) % r.size
+	r.isFull = false
+	return
 }
 
 func (r *RingBuffer) read(p []interface{}) (n int, err error) {
@@ -124,6 +175,34 @@ func (r *RingBuffer) Write(p []interface{}) (n int, err error) {
 
 	return n, err
 }
+
+//1. if writing data bigger than the capacity of ringbuffer, return err
+//2. it will replace oldest data when there is no enough space to write
+func (r *RingBuffer) WriteRoll(p []interface{}) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if len(p) > r.size {
+		return 0, ErrOverCapacity
+	}
+
+	free := r.free()
+	if free < len(p) {
+		needDiscard := len(p) - free
+		r.discard(needDiscard)
+	}
+
+	n, err = r.write(p)
+	if n != len(p) {
+		log.Fatalf("WriteCover fail, len(p):%d, n:%d", len(p), n)
+	}
+
+	return n, err
+}
+
 func (r *RingBuffer) write(p []interface{}) (n int, err error) {
 	if r.isFull {
 		return 0, ErrIsFull

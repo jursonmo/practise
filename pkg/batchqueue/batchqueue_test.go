@@ -9,7 +9,7 @@ import (
 func TestPutGet(t *testing.T) {
 	size := 10
 	entry := int(1)
-	batchqueue := NewBatchQueue(size, "TestPutGet_queue")
+	batchqueue := NewBatchQueue(size, WithName("TestPutGet_queue"))
 	n, err := batchqueue.Put(entry)
 	if err != nil || n != 1 {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestPutGet(t *testing.T) {
 func TestTryGet(t *testing.T) {
 	size := 10
 	entry := int(1)
-	batchqueue := NewBatchQueue(size, "TestTryGet_queue")
+	batchqueue := NewBatchQueue(size, WithName("TestTryGet_queue"))
 
 	//TryGet: unblock get
 	v, err := batchqueue.TryGet()
@@ -54,7 +54,7 @@ func TestTryGet(t *testing.T) {
 func TestPut(t *testing.T) {
 	size := 10
 	entry := int(1)
-	batchqueue := NewBatchQueue(size, "TestPut_queue")
+	batchqueue := NewBatchQueue(size, WithName("TestPut_queue"))
 
 	for i := 0; i < size; i++ {
 		n, err := batchqueue.Put(i)
@@ -78,10 +78,57 @@ func TestPut(t *testing.T) {
 	}
 }
 
+func TestMustPut(t *testing.T) {
+	size := 10
+	batchqueue := NewBatchQueue(size, WithName("TestMustPut_queue"))
+
+	for i := 0; i < size; i++ {
+		n, err := batchqueue.Put(i)
+		if err != nil || n != 1 {
+			t.Fatal(err)
+		}
+	}
+
+	//data 11 repalce the data:0
+	entry := int(11)
+	n, err := batchqueue.PutRoll(entry)
+	if n == 0 || err != nil {
+		t.Fatal("unexpect: MustPut should write data to a full queue")
+	}
+
+	//now data is 1....11, so the next data is 1
+	v, err := batchqueue.Get()
+	if err != nil || v.(int) != 1 {
+		t.Fatal(err)
+	}
+
+	//get two data 2..3
+	_, err = batchqueue.GetWithSize(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//write four data: 12...15, but there is three place to write, so it will replace data 4
+	entries := make([]interface{}, 0, 4)
+	for i := 12; i < 16; i++ {
+		entries = append(entries, i)
+	}
+	n, err = batchqueue.PutRoll(entries...)
+	if n != len(entries) {
+		t.Fatalf("n:%d ,len(entries):%d\n", n, len(entries))
+	}
+	//now the next data should be 5
+	v, err = batchqueue.Get()
+	if err != nil || v.(int) != 5 {
+		t.Fatal(err)
+	}
+
+	batchqueue.Close()
+}
+
 //put one by one,  get one by one concurrently
 func TestGet(t *testing.T) {
 	size := 1000
-	batch := NewBatchQueue(size, "TestGet_queue")
+	batch := NewBatchQueue(size, WithName("TestGet_queue"))
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -121,7 +168,7 @@ func TestGet(t *testing.T) {
 //put one by one, batch get concurrently
 func TestGetWithSize(t *testing.T) {
 	size := 1000
-	batch := NewBatchQueue(size, "TestGetWithSize_queue")
+	batch := NewBatchQueue(size, WithName("TestGetWithSize_queue"))
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -164,7 +211,7 @@ func TestGetWithSize(t *testing.T) {
 func TestPutBatch(t *testing.T) {
 	batchSize := 20
 	size := batchSize * 100
-	batchqueue := NewBatchQueue(size, "TestPutBatch_queue")
+	batchqueue := NewBatchQueue(size, WithName("TestPutBatch_queue"))
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -222,7 +269,7 @@ func TestPutBatch(t *testing.T) {
 //multi puter, and multi geter
 func TestMultiPutGet(t *testing.T) {
 	size := 100
-	batch := NewBatchQueue(size, "TestMultiPutGet_queue")
+	batch := NewBatchQueue(size, WithName("TestMultiPutGet_queue"))
 
 	wg_get := sync.WaitGroup{}
 	wg_put := sync.WaitGroup{}
