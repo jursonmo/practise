@@ -77,9 +77,9 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
 	promiseFunc := func(ctx context.Context) error {
 		if st.promise != nil {
-			st.promise.Reset(ctx, intvl)
+			st.promise.Reset(ctx, NewRegularBackoff(intvl))
 		} else {
-			st.promise = NewPromise(ctx, intvl, ContextErrs())
+			st.promise = NewPromise(ctx, NewRegularBackoff(intvl), ContextErrs())
 		}
 		return st.promise.Call(f, resultHandlers...).Error()
 	}
