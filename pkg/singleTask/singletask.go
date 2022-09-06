@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/jursonmo/practise/pkg/backoffx"
 )
 
 // singletask make sure there is only one task on working at once
@@ -75,15 +77,15 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 //intvl: call f interval time at least
 //resultHandlers will be invoked each time when f return
 func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
-	promiseFunc := func(ctx context.Context) error {
+	promiseWrapFunc := func(ctx context.Context) error {
 		if st.promise != nil {
-			st.promise.Reset(ctx, NewRegularBackoff(intvl))
+			st.promise.Reset(ctx, backoffx.NewRegularBackoff(intvl))
 		} else {
-			st.promise = NewPromise(ctx, NewRegularBackoff(intvl), ContextErrs())
+			st.promise = NewPromise(ctx, backoffx.NewRegularBackoff(intvl), ContextErrs())
 		}
 		return st.promise.Call(f, resultHandlers...).Error()
 	}
-	return st.putTask(promiseFunc)
+	return st.putTask(promiseWrapFunc)
 }
 
 func (st *SingleTask) putTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/jursonmo/practise/pkg/backoffx"
 )
 
 //promise: will call f loop until f return nil or ctx canceled
@@ -12,18 +14,17 @@ type Promise struct {
 	err error
 
 	f        func() error
-	backoff  Backoffer
-	intvl    time.Duration //at least interval time to call f
-	quitErrs []error       //if f() return one of quitErrs, don't try to call f
+	backoff  backoffx.Backoffer
+	quitErrs []error //if f() return one of quitErrs, don't try to call f
 }
 
 func ContextErrs() []error {
 	return []error{context.Canceled, context.DeadlineExceeded}
 }
 
-var DefPromise = NewPromise(context.Background(), (*defaultBackoff)(nil), ContextErrs())
+var DefPromise = NewPromise(context.Background(), backoffx.DefaultBackoff, ContextErrs())
 
-func NewPromise(ctx context.Context, backoff Backoffer, errs []error) *Promise {
+func NewPromise(ctx context.Context, backoff backoffx.Backoffer, errs []error) *Promise {
 	return &Promise{ctx: ctx, backoff: backoff, quitErrs: errs}
 }
 
@@ -60,13 +61,19 @@ func (ms *Promise) Error() error {
 	return ms.err
 }
 
-func (ms *Promise) Reset(ctx context.Context, backoff Backoffer) {
+func (ms *Promise) Reset(ctx context.Context, backoff backoffx.Backoffer) {
 	ms.ctx = ctx
 	ms.backoff = backoff
 	ms.err = nil
 }
 
 func DelayCtx(ctx context.Context, start time.Time, delayAtLeast time.Duration) {
+	//if 'start' is unset
+	none := time.Time{}
+	if start == none {
+		start = time.Now()
+	}
+
 	cost := time.Since(start)
 	if cost >= delayAtLeast {
 		return
