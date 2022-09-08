@@ -98,7 +98,8 @@ func TestPutTaskPromise(t *testing.T) {
 			//return err, means myTask executed fail, will be try again
 			return fmt.Errorf("fail,try again")
 		}
-		//return nil means myTask executed successfully, don't try again
+
+		//if myTaskCall == needCall, return nil means myTask executed successfully, don't try again
 		return nil
 	}
 	myTaskResultHandler := func(result interface{}) {
