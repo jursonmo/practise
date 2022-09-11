@@ -27,6 +27,7 @@ type LatestByKey struct {
 	ctx        context.Context
 	once       sync.Once
 	dataCh     chan []interface{}
+	mu         sync.Mutex
 	keytaskMap map[string]*KeyTask
 	do         func(ctx context.Context, v interface{}) error
 	err        error
@@ -71,6 +72,9 @@ func (l *LatestByKey) handleData(vv []interface{}) {
 		if !ok {
 			continue
 		}
+
+		l.mu.Lock()
+
 		key := k.Key()
 		kt, ok := l.keytaskMap[key]
 		if !ok {
@@ -78,9 +82,19 @@ func (l *LatestByKey) handleData(vv []interface{}) {
 			kt = &KeyTask{key: key, task: singletask.New(l.ctx)}
 			l.keytaskMap[key] = kt
 		}
+
 		tmpv := v
 		kt.task.PutTask(func(ctx context.Context) error {
 			return l.do(ctx, tmpv)
+		}, func(i interface{}) {
+			if i == nil {
+				//err is nil, means task executed successfully, so delete key from keytaskMap
+				l.mu.Lock()
+				defer l.mu.Unlock()
+				delete(l.keytaskMap, key)
+			}
 		})
+
+		l.mu.Unlock()
 	}
 }
