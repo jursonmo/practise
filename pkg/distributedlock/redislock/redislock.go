@@ -3,6 +3,7 @@ package redislock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -35,6 +36,11 @@ type DisLock struct {
 	client *redis.Client
 	key    string
 	opt    LockOptions
+
+	startAt  time.Time //start get lock time
+	obtainAt time.Time //obtain lock and return success
+	ttl      time.Duration
+
 	mu     sync.Mutex
 	closed bool
 	stopCh chan struct{}
@@ -44,6 +50,7 @@ type LockOptions struct {
 	token   string
 	backoff backoffx.Backoffer
 	//ttl   time.Duration
+	minNetDelay time.Duration //the min network delay to redis server, default 2 time.milliseconde
 }
 
 type LockOption func(*LockOptions)
@@ -53,6 +60,7 @@ func NewDisLock(client *redis.Client, key string, opts ...LockOption) *DisLock {
 		return nil
 	}
 	lock := &DisLock{client: client, stopCh: make(chan struct{}, 1)}
+
 	for _, opt := range opts {
 		opt(&lock.opt)
 	}
@@ -61,6 +69,9 @@ func NewDisLock(client *redis.Client, key string, opts ...LockOption) *DisLock {
 	}
 	if lock.opt.backoff == nil {
 		lock.opt.backoff = defaultBackoff
+	}
+	if lock.opt.minNetDelay == 0 {
+		lock.opt.minNetDelay = time.Millisecond * 2
 	}
 	return lock
 }
@@ -78,35 +89,29 @@ func (l *DisLock) Close() {
 	close(l.stopCh)
 }
 
-//ctx deadline is task deadline, ttl is key time live, ttl 往往表示do 所花的时间，当然如果ttl 内，do 没有完成，会自动续约
-//ctx task 的期限应该要比ttl 大，不然，task 期限到的时候要注意把锁释放掉
-func (l *DisLock) Lock(ctx context.Context, ttl time.Duration, do func(context.Context) error, fail func(context.Context) error) (ok bool, err error) {
+//ctx is for getting distributed lock
+func (l *DisLock) Lock(ctx context.Context, ttl time.Duration) (ok bool, err error) {
 	//避免当前锁崩溃后，锁永远不释放
 	if ttl == 0 {
 		return false, ErrNoExpiration
 	}
+	l.ttl = ttl
 
-	var cancel context.CancelFunc
 	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.Now().Add(ttl))
-		//defer cancel()
+		defer cancel()
 	}
 
 	defer l.opt.backoff.Reset()
-	defer func() {
-		if err == nil {
-			go l.execute(ctx, ttl, do)
-			go l.autoRefresh(ctx)
-		}
-	}()
-
 	for {
+		l.startAt = time.Now()
 		ok, err = l.client.SetNX(ctx, l.key, l.opt.token, ttl).Result()
 		if ok {
+			l.obtainAt = time.Now()
 			return
 		}
 		if isContextErr(err) {
-			cancel()
 			return
 		}
 		if err != nil {
@@ -118,74 +123,84 @@ func (l *DisLock) Lock(ctx context.Context, ttl time.Duration, do func(context.C
 		time.Sleep(l.opt.backoff.Duration())
 	}
 }
-func (l *DisLock) execute(ctx context.Context, ttl time.Duration, do func(context.Context) error) {
-	defer l.Close()
-	err := do(ctx)
-	if err == nil || isContextErr(err) {
-		return
+
+//ctx is for task deadline, should renew lock ttl
+func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) error {
+	ttl := l.lockTTL()
+	if ttl < l.opt.minNetDelay {
+		return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 	}
 
-	timer := time.NewTimer(ttl / 3)
-	defer timer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			//fail
-			return
-		case <-l.stopCh:
-			return
-		case <-timer.C:
-			err := do(ctx)
-			if err == nil || isContextErr(err) {
-				return
-			}
-			timer.Reset(ttl / 3)
-		}
+	timer := &time.Timer{}
+	var cancel context.CancelFunc
+	expireAt := l.lockExpireAt()
 
-	}
-}
-func (l *DisLock) autoRefresh(ctx context.Context) {
 	dl, ok := ctx.Deadline()
 	if !ok {
-		panic("no deadline is set")
+		ctx, cancel = context.WithDeadline(ctx, expireAt)
+		dl = expireAt
+		defer cancel()
+	} else if dl.After(expireAt) { //dl > expireAt, should renew at ttl / 2
+		intvl := ttl / 2
+		timer = time.NewTimer(intvl)
+		defer timer.Stop()
 	}
-	util := time.Until(dl)
-	if util < time.Millisecond {
-		return
-	}
-	pttl := util / 2
+	//if dl < expireAt, don't need to renew lock key, no timer to refresh
 
-	intvl := pttl
-	timer := time.NewTimer(intvl)
-	defer timer.Stop()
+	defer func() {
+		nctx, _ := context.WithTimeout(context.Background(), time.Second)
+		err := l.Release(nctx)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
+	defer l.opt.backoff.Reset()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-l.stopCh:
-			//do it once, if fail, key also expire in
-			l.Release(ctx)
-			return
+			return errors.New("closed")
 		case <-timer.C:
-			err := l.Refresh(ctx, pttl)
-			if err == ErrNotObtained {
-				//key is expire ?
-				return
+			//come to here, means  expireAt < dl, so pttl to dl, because task maybe continue or block util ctx deadline
+			pttl := time.Until(dl)
+			if pttl < l.opt.minNetDelay {
+				return fmt.Errorf("pttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 			}
-			if err != nil {
-				//try again
-				intvl = intvl / 2
-				if intvl < time.Millisecond {
-					return
-				}
-				timer.Reset(intvl)
+			err := l.Refresh(ctx, pttl) //renew
+			if err == nil {
+				fmt.Println("refresh ok")
 				continue
 			}
-			// err == nil ,refresh ok
-			//如果续约成功，那么pttl 就会超过ctx 的deadline
+			if err == ErrNotObtained {
+				//key is expire ?
+				return err
+			}
+			//err != nil
+			ttl := time.Until(expireAt)
+			if ttl < l.opt.minNetDelay {
+				return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
+			}
+			timer.Reset(ttl / 2) //next time to refresh(renew) lock
+
+		default:
+			err := task(ctx)
+			if err == nil {
+				return nil
+			}
+			time.Sleep(l.opt.backoff.Duration())
 		}
 	}
+}
+
+//因为网络有延迟的，所以在redis 的ttl 跟应用层计算出来时间是有差异的
+func (l *DisLock) lockExpireAt() time.Time {
+	return l.startAt.Add(l.obtainAt.Sub(l.startAt)/2 + l.ttl)
+}
+
+func (l *DisLock) lockTTL() time.Duration {
+	return time.Until(l.lockExpireAt())
 }
 
 func (l *DisLock) Refresh(ctx context.Context, ttl time.Duration) error {
@@ -213,3 +228,51 @@ func (l *DisLock) Release(ctx context.Context) error {
 	}
 	return nil
 }
+
+/*
+func (l *DisLock) autoRefresh(ctx context.Context) {
+	dl, ok := ctx.Deadline()
+	if !ok {
+		panic("no deadline is set")
+	}
+	util := time.Until(dl)
+	if util < time.Millisecond {
+		return
+	}
+	pttl := util / 2
+
+	intvl := pttl
+	timer := time.NewTimer(intvl)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			nctx, _ := context.WithTimeout(context.Background(), time.Second)
+			l.Release(nctx)
+			return
+		case <-l.stopCh:
+			//do it once, if fail, key also expire in
+			l.Release(ctx)
+			return
+		case <-timer.C:
+			err := l.Refresh(ctx, pttl)
+			if err == ErrNotObtained {
+				//key is expire ?
+				return
+			}
+			if err != nil {
+				//try again
+				intvl = intvl / 2
+				if intvl < time.Millisecond {
+					return
+				}
+				timer.Reset(intvl)
+				continue
+			}
+			// err == nil ,refresh ok
+			//如果续约成功，那么pttl 就会超过ctx 的deadline
+		}
+	}
+}
+*/
