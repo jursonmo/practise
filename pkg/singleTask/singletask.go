@@ -92,9 +92,9 @@ func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
 	promiseWrapFunc := func(ctx context.Context) error {
 		if st.promise != nil {
-			st.promise.Reset(ctx, backoffx.NewRegularBackoff(intvl))
+			st.promise.Reset(ctx, backoffx.NewLinearBackoff(intvl))
 		} else {
-			st.promise = NewPromise(ctx, backoffx.NewRegularBackoff(intvl), ContextErrs())
+			st.promise = NewPromise(ctx, backoffx.NewLinearBackoff(intvl), ContextErrs())
 		}
 		return st.promise.Call(f, resultHandlers...).Error()
 	}

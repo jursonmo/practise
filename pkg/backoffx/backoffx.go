@@ -11,20 +11,20 @@ type Backoffer interface {
 	Reset()
 }
 
-var DefaultBackoff Backoffer = &RegularBackoff{time.Second * 5}
+var DefaultBackoff Backoffer = &LinearBackoff{time.Second * 5}
 
-type RegularBackoff struct {
+type LinearBackoff struct {
 	d time.Duration
 }
 
-func (rb *RegularBackoff) Duration() time.Duration {
+func (rb *LinearBackoff) Duration() time.Duration {
 	return rb.d
 }
 
-func (rb *RegularBackoff) Reset() {}
+func (rb *LinearBackoff) Reset() {}
 
-func NewRegularBackoff(d time.Duration) Backoffer {
-	return &RegularBackoff{d: d}
+func NewLinearBackoff(d time.Duration) Backoffer {
+	return &LinearBackoff{d: d}
 }
 
 //github.com/rfyiamcool/backoff
