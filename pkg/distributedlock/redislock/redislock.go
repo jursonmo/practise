@@ -91,7 +91,7 @@ func (l *DisLock) Close() {
 
 //ctx is for getting distributed lock
 func (l *DisLock) Lock(ctx context.Context, ttl time.Duration) (ok bool, err error) {
-	//避免当前锁崩溃后，锁永远不释放
+	//ttl 不能为0, 避免当前锁崩溃后，锁永远不释放
 	if ttl == 0 {
 		return false, ErrNoExpiration
 	}
@@ -137,6 +137,7 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 
 	dl, ok := ctx.Deadline()
 	if !ok {
+		//如果没有设置过期时间，那么就用lock 的过期时间，task ctx 必须有超时机制，不能永久阻塞
 		ctx, cancel = context.WithDeadline(ctx, expireAt)
 		dl = expireAt
 		defer cancel()
@@ -145,15 +146,9 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		refreshTimer = time.NewTimer(intvl)
 		defer refreshTimer.Stop()
 	}
-	//if dl < expireAt, don't need to renew lock key, no timer to refresh
+	//if dl <= expireAt, don't need to renew lock key, no timer to refresh
 
-	defer func() {
-		nctx, _ := context.WithTimeout(context.Background(), time.Second)
-		err := l.Release(nctx)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
+	defer l.release()
 	defer l.opt.backoff.Reset()
 
 	err := task(ctx)
@@ -201,6 +196,22 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 			taskTimer.Reset(l.opt.backoff.Duration())
 		}
 	}
+}
+
+func (l *DisLock) release() error {
+	//release 的超时时间应该设置多长呢，就取抢占锁的时间的多点吧
+	d := l.obtainAt.Sub(l.startAt)
+	if d < time.Millisecond*100 {
+		d = time.Duration(float64(d) * 1.5)
+	} else if d < time.Millisecond*200 {
+		d = time.Duration(float64(d) * 1.2)
+	}
+	nctx, _ := context.WithTimeout(context.Background(), d)
+	err := l.Release(nctx)
+	if err != nil {
+		fmt.Println(err, d)
+	}
+	return err
 }
 
 //因为网络有延迟的，所以在redis 的ttl 跟应用层计算出来时间是有差异的
