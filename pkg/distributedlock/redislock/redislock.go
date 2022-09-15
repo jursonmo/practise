@@ -131,7 +131,7 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 	}
 
-	timer := &time.Timer{}
+	refreshTimer := &time.Timer{}
 	var cancel context.CancelFunc
 	expireAt := l.lockExpireAt()
 
@@ -142,8 +142,8 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		defer cancel()
 	} else if dl.After(expireAt) { //dl > expireAt, should renew at ttl / 2
 		intvl := ttl / 2
-		timer = time.NewTimer(intvl)
-		defer timer.Stop()
+		refreshTimer = time.NewTimer(intvl)
+		defer refreshTimer.Stop()
 	}
 	//if dl < expireAt, don't need to renew lock key, no timer to refresh
 
@@ -156,13 +156,22 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 	}()
 	defer l.opt.backoff.Reset()
 
+	err := task(ctx)
+	if err == nil {
+		return nil
+	}
+
+	d := l.opt.backoff.Duration()
+	taskTimer := time.NewTimer(d)
+	defer taskTimer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-l.stopCh:
 			return errors.New("closed")
-		case <-timer.C:
+		case <-refreshTimer.C:
 			//come to here, means  expireAt < dl, so pttl to dl, because task maybe continue or block util ctx deadline
 			pttl := time.Until(dl)
 			if pttl < l.opt.minNetDelay {
@@ -182,14 +191,14 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 			if ttl < l.opt.minNetDelay {
 				return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 			}
-			timer.Reset(ttl / 2) //next time to refresh(renew) lock
+			refreshTimer.Reset(ttl / 2) //next time to refresh(renew) lock
 
-		default:
+		case <-taskTimer.C:
 			err := task(ctx)
 			if err == nil {
 				return nil
 			}
-			time.Sleep(l.opt.backoff.Duration())
+			taskTimer.Reset(l.opt.backoff.Duration())
 		}
 	}
 }
