@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -13,6 +14,30 @@ import (
 	"github.com/jursonmo/practise/pkg/backoffx"
 	"github.com/rfyiamcool/backoff"
 )
+
+type Log interface {
+	Debugf(format string, a ...interface{})
+	Infof(format string, a ...interface{})
+	// Notice(format string, a ...interface{})
+	// Warn(format string, a ...interface{})
+	Errorf(format string, a ...interface{})
+	Fatalf(format string, a ...interface{})
+}
+
+type mylog struct{}
+
+func (l *mylog) Debugf(format string, a ...interface{}) {
+	log.Printf(format, a...)
+}
+func (l *mylog) Infof(format string, a ...interface{}) {
+	log.Printf(format, a...)
+}
+func (l *mylog) Errorf(format string, a ...interface{}) {
+	log.Printf(format, a...)
+}
+func (l *mylog) Fatalf(format string, a ...interface{}) {
+	log.Printf(format, a...)
+}
 
 var (
 	luaRefresh = redis.NewScript(`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("pexpire", KEYS[1], ARGV[2]) else return 0 end`)
@@ -31,15 +56,19 @@ var (
 var defaultBackoff = backoff.NewBackOff(backoff.WithMinDelay(time.Millisecond*5), backoff.WithMaxDelay(time.Millisecond*50),
 	backoff.WithFactor(1.5), backoff.WithJitterFlag(true))
 
+func isContextErr(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 type DisLock struct {
 	ctx    context.Context
 	client *redis.Client
 	key    string
 	opt    LockOptions
 
-	startAt  time.Time //start get lock time
-	obtainAt time.Time //obtain lock and return success
-	ttl      time.Duration
+	startAt  time.Time     //start get lock time
+	obtainAt time.Time     //obtain lock and return success
+	ttl      time.Duration //lock time expected
 
 	mu     sync.Mutex
 	closed bool
@@ -47,9 +76,9 @@ type DisLock struct {
 }
 
 type LockOptions struct {
-	token   string
-	backoff backoffx.Backoffer
-	//ttl   time.Duration
+	log         Log
+	token       string
+	backoff     backoffx.Backoffer
 	minNetDelay time.Duration //the min network delay to redis server, default 2 time.milliseconde
 }
 
@@ -71,11 +100,17 @@ func WithMinNetDelay(networkDelay time.Duration) LockOption {
 	}
 }
 
+func WithLog(log Log) LockOption {
+	return func(lo *LockOptions) {
+		lo.log = log
+	}
+}
+
 func NewDisLock(client *redis.Client, key string, opts ...LockOption) *DisLock {
 	if client == nil || key == "" {
 		return nil
 	}
-	lock := &DisLock{client: client, stopCh: make(chan struct{}, 1)}
+	lock := &DisLock{client: client, key: key, stopCh: make(chan struct{}, 1)}
 
 	for _, opt := range opts {
 		opt(&lock.opt)
@@ -89,12 +124,16 @@ func NewDisLock(client *redis.Client, key string, opts ...LockOption) *DisLock {
 	if lock.opt.minNetDelay == 0 {
 		lock.opt.minNetDelay = time.Millisecond * 2
 	}
+	if lock.opt.log == nil {
+		lock.opt.log = (*mylog)(nil)
+	}
 	return lock
 }
 
-func isContextErr(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+func (l *DisLock) String() string {
+	return fmt.Sprintf("key:%s, token:%s, ttl:%v, startAt:%v, obtainAt:%v, net ttl:%v", l.key, l.opt.token, l.ttl, l.startAt, l.obtainAt, l.obtainAt.Sub(l.startAt))
 }
+
 func (l *DisLock) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -121,9 +160,10 @@ func (l *DisLock) Lock(ctx context.Context, ttl time.Duration) (ok bool, err err
 
 	defer l.opt.backoff.Reset()
 	for {
-		l.startAt = time.Now()
+		start := time.Now()
 		ok, err = l.client.SetNX(ctx, l.key, l.opt.token, ttl).Result()
 		if ok {
+			l.startAt = start
 			l.obtainAt = time.Now()
 			return
 		}
@@ -131,7 +171,8 @@ func (l *DisLock) Lock(ctx context.Context, ttl time.Duration) (ok bool, err err
 			return
 		}
 		if err != nil {
-			time.Sleep(time.Second)
+			l.opt.log.Errorf("setnx err:%v", err)
+			time.Sleep(l.opt.backoff.Duration())
 			continue
 		}
 		// backoff and retry to lock
@@ -146,6 +187,7 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 	if ttl < l.opt.minNetDelay {
 		return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 	}
+	l.opt.log.Infof("ttl:%v", ttl)
 
 	refreshTimer := &time.Timer{}
 	var cancel context.CancelFunc
@@ -164,7 +206,12 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 	}
 	//if dl <= lockExpireAt, don't need to renew lock key, no timer to refresh
 
-	defer l.release()
+	defer func() {
+		err := l.release()
+		if err != nil {
+			l.opt.log.Errorf("release err:%v\n", err)
+		}
+	}()
 
 	taskctx := ctx
 	var ncancel context.CancelFunc
@@ -194,22 +241,28 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 			if pttl < l.opt.minNetDelay {
 				return fmt.Errorf("pttl(%v) < minNetDelay(%v)", ttl, l.opt.minNetDelay)
 			}
+			//每次续约的最大值不能超过期望的ttl
+			if pttl > l.ttl {
+				pttl = l.ttl
+			}
 			err := l.Refresh(ctx, pttl) //renew
 			if err == nil {
-				fmt.Println("refresh ok")
+				l.opt.log.Debugf("refresh ok, pttl:%v, task deadline %v, %v", pttl, time.Until(dl), dl)
+				refreshTimer.Reset(pttl / 2) //next time to refresh(renew) lock
 				continue
 			}
 			if err == ErrNotObtained {
 				//key is expire ?
 				return err
 			}
+
 			//err != nil
+			lockExpireAt = l.lockExpireAt()
 			ttl := time.Until(lockExpireAt)
 			if ttl < l.opt.minNetDelay {
 				return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
 			}
 			refreshTimer.Reset(ttl / 2) //next time to refresh(renew) lock
-
 		case <-taskTimer.C:
 			err := task(ctx)
 			if err == nil {
@@ -220,20 +273,27 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 	}
 }
 
-func (l *DisLock) release() error {
-	//release 的超时时间应该设置多长呢，就取抢占锁时所花的时间的多点吧
-	d := l.obtainAt.Sub(l.startAt)
-	if d < time.Millisecond*100 {
-		d = time.Duration(float64(d) * 1.5)
-	} else if d < time.Millisecond*200 {
-		d = time.Duration(float64(d) * 1.2)
-	}
-	nctx, cancel := context.WithTimeout(context.Background(), d)
-	defer cancel()
-	//只做一次Release, 不成功的话，就等redis lock key自己超时
-	err := l.Release(nctx)
-	if err != nil {
-		fmt.Println(err, d)
+func (l *DisLock) release() (err error) {
+	//分布式锁只有一个持有者，多试几次不会造成太大压力
+	l.opt.backoff.Reset()
+	defer l.opt.backoff.Reset()
+	for i := 0; i < 3; i++ {
+		ttl := l.lockTTL()
+		if ttl < l.opt.minNetDelay {
+			return fmt.Errorf("d(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
+		}
+		nctx, _ := context.WithTimeout(context.Background(), ttl)
+
+		err = l.Release(nctx)
+		if err == nil {
+			return nil
+		}
+		if err == ErrLockNotHeld {
+			return err
+		}
+
+		l.opt.log.Debugf("relase times:%d, ttl:%v, err:%v", i, ttl, err)
+		time.Sleep(l.opt.backoff.Duration())
 	}
 	return err
 }
@@ -251,10 +311,13 @@ func (l *DisLock) lockTTL() time.Duration {
 
 func (l *DisLock) Refresh(ctx context.Context, ttl time.Duration) error {
 	ttlVal := strconv.FormatInt(int64(ttl/time.Millisecond), 10)
+	start := time.Now()
 	status, err := luaRefresh.Run(ctx, l.client, []string{l.key}, l.opt.token, ttlVal).Result()
 	if err != nil {
 		return err
 	} else if status == int64(1) {
+		l.startAt = start
+		l.obtainAt = time.Now()
 		return nil
 	}
 	// err == nil, result is 0, means key not exsit
