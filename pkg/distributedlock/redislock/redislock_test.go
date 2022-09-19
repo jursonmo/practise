@@ -26,10 +26,9 @@ func TestAbtainLock(t *testing.T) {
 		t.Fatal("")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	ttl := time.Second * 2
 
-	ok, err := l1.Lock(ctx, time.Second*2)
+	ok, err := l1.Lock(context.Background(), ttl)
 	if err != nil || !ok {
 		t.Fatal(err)
 	}
@@ -39,7 +38,7 @@ func TestAbtainLock(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		task1 := func(ctx context.Context) error {
-			timer := time.NewTimer(time.Millisecond * 1900)
+			timer := time.NewTimer(ttl - time.Millisecond*20)
 			defer timer.Stop()
 			select {
 			case <-ctx.Done():
@@ -50,29 +49,44 @@ func TestAbtainLock(t *testing.T) {
 			}
 			return errors.New("")
 		}
-		err = l1.Run(ctx, task1)
+		err = l1.Run(context.Background(), task1)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}()
 
-	//simulate another task to obtain distributed lock
-	go func() {
+	//simulate another app to obtain distributed lock
+	app2 := func() {
 		defer wg.Done()
 		l2 := NewDisLock(client, key)
 		if l2 == nil {
 			t.Fatal("")
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*1900)
-		defer cancel()
-
-		ok, _ := l2.Lock(ctx, time.Millisecond*1900)
+		ok, _ := l2.Lock(context.Background(), ttl-time.Millisecond*10)
 		if ok {
 			t.Fatal("unexpert, get lock")
 		}
 
-	}()
+	}
+	go app2()
 
 	wg.Wait()
+
+	//now we should get lock success
+
+	l3 := NewDisLock(client, key)
+	if l3 == nil {
+		t.Fatal("")
+	}
+
+	ok, err = l3.Lock(context.Background(), ttl-time.Millisecond*10)
+	if err != nil || !ok {
+		t.Fatal(err, "we should get lock success")
+	}
+
+	err = l3.Release(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 }
