@@ -171,8 +171,9 @@ func (l *DisLock) Lock(ctx context.Context, ttl time.Duration) (ok bool, err err
 			return
 		}
 		if err != nil {
-			l.opt.log.Errorf("setnx err:%v", err)
-			time.Sleep(l.opt.backoff.Duration())
+			backoff := l.opt.backoff.Duration()
+			l.opt.log.Errorf("setnx err:%v, backoff:%v", err, backoff)
+			time.Sleep(backoff)
 			continue
 		}
 		// backoff and retry to lock

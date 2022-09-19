@@ -12,7 +12,7 @@ import (
 
 var redis_server = "192.168.64.5:6379"
 
-func TestBase(t *testing.T) {
+func TestAbtainLock(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Network: "tcp",
 		Addr:    redis_server,
