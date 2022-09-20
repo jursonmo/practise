@@ -198,7 +198,6 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		}
 	}()
 
-	//refreshTimer := &time.Timer{}
 	var cancel context.CancelFunc
 	lockExpireAt := l.lockExpireAt()
 
@@ -208,26 +207,12 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		ctx, cancel = context.WithDeadline(ctx, lockExpireAt)
 		dl = lockExpireAt
 	} else if dl.After(lockExpireAt) { //dl > lockExpireAt, should renew at ttl / 2
-		// intvl := ttl / 2
-		// refreshTimer = time.NewTimer(intvl)
-		// defer refreshTimer.Stop()
 		ctx, cancel = context.WithCancel(ctx)
 		go l.autoRefresh(ctx, cancel)
 	}
 	defer cancel()
 	//if dl <= lockExpireAt, don't need to renew lock key, no timer to refresh
 
-	// taskctx := ctx
-	// var ncancel context.CancelFunc
-	// if dl.After(lockExpireAt) {
-	// 	taskctx, ncancel = context.WithDeadline(ctx, lockExpireAt) //确保业务task 执行过程中, lock key 肯定没有超时的
-	// 	defer ncancel()
-	// }
-	// err := task(taskctx)
-	// if err == nil {
-	// 	return nil
-	// }
-	//taskTimer := time.NewTimer(l.opt.backoff.Duration())
 	taskTimer := time.NewTimer(0)
 	defer taskTimer.Stop()
 	defer l.opt.backoff.Reset()
@@ -238,36 +223,6 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 			return ctx.Err()
 		case <-l.stopCh:
 			return errors.New("closed")
-			/*
-				case <-refreshTimer.C:
-					//come to here, means lock key's lockExpireAt < dl, so pttl to dl, because task maybe continue or block util ctx deadline
-					pttl := time.Until(dl)
-					if pttl < l.opt.minNetDelay {
-						return fmt.Errorf("pttl(%v) < minNetDelay(%v)", ttl, l.opt.minNetDelay)
-					}
-					//每次续约的最大值不能超过期望的ttl
-					if pttl > l.ttl {
-						pttl = l.ttl
-					}
-					err := l.Refresh(ctx, pttl) //renew
-					if err == nil {
-						l.opt.log.Debugf("refresh ok, pttl:%v, task deadline %v, %v", pttl, time.Until(dl), dl)
-						refreshTimer.Reset(pttl / 2) //next time to refresh(renew) lock
-						continue
-					}
-					if err == ErrNotObtained {
-						//key is expire ?
-						return err
-					}
-
-					//err != nil
-					lockExpireAt = l.lockExpireAt()
-					ttl := time.Until(lockExpireAt)
-					if ttl < l.opt.minNetDelay {
-						return fmt.Errorf("ttl(%d) < minNetDelay(%d)", ttl, l.opt.minNetDelay)
-					}
-					refreshTimer.Reset(ttl / 2) //next time to refresh(renew) lock
-			*/
 		case <-taskTimer.C:
 			taskctx, cancel := context.WithDeadline(ctx, l.lockExpireAt())
 			err := task(taskctx)
