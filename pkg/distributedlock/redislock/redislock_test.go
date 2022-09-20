@@ -33,7 +33,7 @@ func TestBaseFunction(t *testing.T) {
 	lock1TTL := time.Second * 2
 	ok, err := lock1.Lock(context.Background(), lock1TTL)
 	if err != nil || !ok {
-		t.Fatal(err, ", get the distributed lock fail")
+		t.Fatal(err, ", lock1 get the distributed lock fail")
 	}
 
 	//lock2 can't aquire the distributed lock
@@ -64,6 +64,12 @@ func TestBaseFunction(t *testing.T) {
 	//lock2 release the distributed lock
 	err = lock2.Unlock(context.Background())
 	if err != nil {
+		t.Fatal(err, ", lock2 unlock fail")
+	}
+
+	//test ttl after release the distributed lock, should return ttl 0
+	ttl, err := lock2.TTL(context.Background())
+	if ttl != 0 && err != nil {
 		t.Fatal(err, ", lock2 unlock fail")
 	}
 }
