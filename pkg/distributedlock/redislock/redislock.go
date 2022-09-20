@@ -207,15 +207,14 @@ func (l *DisLock) Run(ctx context.Context, task func(context.Context) error) err
 		//如果没有设置过期时间，那么就用lock 的过期时间，task ctx 必须有超时机制，不能永久阻塞
 		ctx, cancel = context.WithDeadline(ctx, lockExpireAt)
 		dl = lockExpireAt
-		defer cancel()
 	} else if dl.After(lockExpireAt) { //dl > lockExpireAt, should renew at ttl / 2
 		// intvl := ttl / 2
 		// refreshTimer = time.NewTimer(intvl)
 		// defer refreshTimer.Stop()
-
 		ctx, cancel = context.WithCancel(ctx)
 		go l.autoRefresh(ctx, cancel)
 	}
+	defer cancel()
 	//if dl <= lockExpireAt, don't need to renew lock key, no timer to refresh
 
 	// taskctx := ctx
