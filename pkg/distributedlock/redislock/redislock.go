@@ -15,7 +15,7 @@ import (
 	"github.com/rfyiamcool/backoff"
 )
 
-type Log interface {
+type Logger interface {
 	Debugf(format string, a ...interface{})
 	Infof(format string, a ...interface{})
 	// Notice(format string, a ...interface{})
@@ -48,7 +48,6 @@ var (
 	ErrNoExpiration = errors.New("not allowed to lock key with no expiration")
 	// ErrNotObtained is returned when a lock cannot be obtained.
 	ErrNotObtained = errors.New("redislock: not obtained")
-
 	// ErrLockNotHeld is returned when trying to release an inactive lock.
 	ErrLockNotHeld = errors.New("redislock: lock not held")
 )
@@ -77,7 +76,7 @@ type DisLock struct {
 }
 
 type LockOptions struct {
-	log         Log
+	log         Logger
 	token       string
 	backoff     backoffx.Backoffer
 	minNetDelay time.Duration //the min network delay to redis server, default 2 time.milliseconde
@@ -101,7 +100,7 @@ func WithMinNetDelay(networkDelay time.Duration) LockOption {
 	}
 }
 
-func WithLog(log Log) LockOption {
+func WithLog(log Logger) LockOption {
 	return func(lo *LockOptions) {
 		lo.log = log
 	}
@@ -263,6 +262,7 @@ func (l *DisLock) autoRefresh(ctx context.Context, cancel context.CancelFunc) er
 			pttl := time.Until(dl)
 			if pttl < l.opt.minNetDelay*2 {
 				//return fmt.Errorf("pttl(%v) < 2*minNetDelay(%v)", ttl, l.opt.minNetDelay*2)
+				l.opt.log.Debugf("give up refresh, pttl(%v) < 2*minNetDelay(%v)", ttl, l.opt.minNetDelay*2)
 				continue //almost to deadline, don't need to refresh
 			}
 			//每次续约的最大值不能超过期望的ttl, 避免程序崩溃后锁过期时间过长,导致其他任务无法及时抢占锁
