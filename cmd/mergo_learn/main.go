@@ -41,6 +41,7 @@ func main() {
 	fmt.Println("cc redis port: ", cc.Port)
 	fmt.Println("cc redis db: ", cc.DB) // cc.DB= 1, 即如果源的字段是默认值,会被替换
 
+	//struct to map
 	var m = make(map[string]interface{})
 	if err := mergo.Map(&m, defaultConfig); err != nil {
 		log.Fatal(err)
@@ -54,4 +55,28 @@ func main() {
 	}
 
 	fmt.Println(ms)
+
+	//map to Struct
+	mapToStruct()
+}
+
+type Student struct {
+	Name string
+	Num  int
+	Age  int
+}
+
+func mapToStruct() {
+	var defaultStudent = Student{}
+
+	var m = make(map[string]interface{})
+	m["name"] = "lisi"
+	m["num"] = 2
+	m["age"] = 20
+
+	if err := mergo.Map(&defaultStudent, m); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("struct defaultStudent = %+v", defaultStudent)
 }
