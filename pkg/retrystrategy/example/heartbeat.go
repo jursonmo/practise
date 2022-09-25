@@ -13,7 +13,7 @@ func main() {
 	strategy := retrystrategy.NewRetryStrategy(3, hbBackoff)
 
 	pingCh := make(chan struct{}, 3)
-	replyCh := make(chan struct{}, 3)
+	pongCh := make(chan struct{}, 3)
 
 	receive := 0
 	sendheatbeat := func() {
@@ -23,7 +23,7 @@ func main() {
 		select {
 		case <-t.C:
 			log.Println("wait for heatbeat reply timeout")
-		case <-replyCh:
+		case <-pongCh:
 			log.Println("get heatbeat reply")
 		}
 	}
@@ -66,7 +66,7 @@ func main() {
 				log.Println("get heatbeat, and send heatbeat reply and reset strategy")
 				strategy.Reset()
 				//send heatbeat reply
-				replyCh <- struct{}{}
+				pongCh <- struct{}{}
 			}
 		}
 	}()
