@@ -7,6 +7,6 @@ import (
 	"time"
 )
 
-func keepaliveControl(t time.Duration) func(network, address string, c syscall.RawConn) error {
+func TcpUserTimeoutControl(t time.Duration) func(network, address string, c syscall.RawConn) error {
 	return nil
 }

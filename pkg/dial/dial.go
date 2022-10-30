@@ -46,11 +46,12 @@ func SleepWithCtx(ctx context.Context, start time.Time, maxSleep time.Duration) 
 // }
 
 type DialConfig struct {
-	Timeout      time.Duration
-	KeepAlive    time.Duration //for linux: use socket option: tcp_user_timeout
-	BackOff      backoffx.Backoffer
-	MaxDial      int64
-	DialFailFunc func(error)
+	Timeout        time.Duration
+	KeepAlive      time.Duration
+	TcpUserTimeout time.Duration //for linux: use socket option: tcp_user_timeout
+	BackOff        backoffx.Backoffer
+	MaxDial        int64
+	DialFailFunc   func(error)
 	//Dial(network, address string) (net.Conn, error)
 }
 
@@ -96,9 +97,16 @@ func WithTimeout(t time.Duration) DialOption {
 		c.Timeout = t
 	}
 }
+
 func WithKeepAlive(t time.Duration) DialOption {
 	return func(c *DialConfig) {
 		c.KeepAlive = t
+	}
+}
+
+func WithTcpUserTimeout(t time.Duration) DialOption {
+	return func(c *DialConfig) {
+		c.TcpUserTimeout = t
 	}
 }
 
@@ -130,7 +138,7 @@ func Dial(ctx context.Context, addr string, options ...DialOption) (conn net.Con
 	}
 	var dialer dialContexter
 
-	control := keepaliveControl(c.KeepAlive)
+	control := TcpUserTimeoutControl(c.TcpUserTimeout)
 	switch network.Scheme {
 	case "tls":
 		tlsconf := &tls.Config{
@@ -140,11 +148,11 @@ func Dial(ctx context.Context, addr string, options ...DialOption) (conn net.Con
 		}
 		//conn, err = tls.Dial("tcp", network.Host, tlsconf)
 		//conn, err = tls.DialWithDialer(&net.Dialer{Timeout: c.Timeout}, "tcp", network.Host, tlsconf)
-		td := &tls.Dialer{NetDialer: &net.Dialer{Timeout: c.Timeout, Control: control}, Config: tlsconf}
+		td := &tls.Dialer{NetDialer: &net.Dialer{Timeout: c.Timeout, Control: control, KeepAlive: c.KeepAlive}, Config: tlsconf}
 		//conn, err = td.DialContext(ctx, "tcp", network.Host)
 		dialer = td
 	case "tcp":
-		d := &net.Dialer{Timeout: c.Timeout, Control: control}
+		d := &net.Dialer{Timeout: c.Timeout, Control: control, KeepAlive: c.KeepAlive}
 		//conn, err = d.DialContext(ctx, "tcp", network.Host)
 		dialer = d
 	}

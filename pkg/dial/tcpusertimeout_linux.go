@@ -7,7 +7,7 @@ import (
 )
 
 //golang.org/x/sys v0.0.0-20210902050250-f475640dd07b
-func keepaliveControl(t time.Duration) func(network, address string, c syscall.RawConn) error {
+func TcpUserTimeoutControl(t time.Duration) func(network, address string, c syscall.RawConn) error {
 	if t < time.Millisecond {
 		return nil
 	}
