@@ -99,4 +99,9 @@ tcp46      0      0  *.1313                 *.*                    LISTEN
 tcp4       0      0  127.0.0.1.52846        127.0.0.1.1313         TIME_WAIT
 tcp4       0      0  127.0.0.1.52844        127.0.0.1.1313         TIME_WAIT
 tcp4       0      0  127.0.0.1.52848        127.0.0.1.1313         TIME_WAIT
+
+抓包看是http 1.1
+http1 可以同时多个request 是因为底层发起多个tcp连接，
+http2 已经是多路复用，一个tcp连接里多个http request,
+http3 底层是udp quic
 */
