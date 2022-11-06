@@ -29,6 +29,23 @@ var NO_DES = []uint16{
 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 }
+var secureCipherSuites []uint16
+
+func init() {
+	SecureCipherSuites()
+}
+
+func SecureCipherSuites() []uint16 {
+	if len(secureCipherSuites) > 0 {
+		return secureCipherSuites
+	}
+	css := tls.CipherSuites()
+	secureCipherSuites = make([]uint16, 0, len(css))
+	for _, cs := range css {
+		secureCipherSuites = append(secureCipherSuites, cs.ID)
+	}
+	return secureCipherSuites
+}
 
 func SleepWithCtx(ctx context.Context, start time.Time, maxSleep time.Duration) {
 	cost := time.Since(start)
@@ -144,7 +161,8 @@ func Dial(ctx context.Context, addr string, options ...DialOption) (conn net.Con
 		tlsconf := &tls.Config{
 			InsecureSkipVerify: true,
 			MinVersion:         tls.VersionTLS11,
-			CipherSuites:       NO_DES,
+			//CipherSuites:       NO_DES,
+			CipherSuites: SecureCipherSuites(),
 		}
 		//conn, err = tls.Dial("tcp", network.Host, tlsconf)
 		//conn, err = tls.DialWithDialer(&net.Dialer{Timeout: c.Timeout}, "tcp", network.Host, tlsconf)

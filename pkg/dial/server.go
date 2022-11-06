@@ -90,7 +90,8 @@ func NewServer(addr string, options ...ServerOption) (*Server, error) {
 	}
 
 	if s.tlsConf != nil && s.tlsConf.CipherSuites == nil {
-		s.tlsConf.CipherSuites = NO_DES
+		//s.tlsConf.CipherSuites = NO_DES
+		s.tlsConf.CipherSuites = SecureCipherSuites()
 	}
 	return s, nil
 }
