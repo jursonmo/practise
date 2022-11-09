@@ -64,7 +64,7 @@ func SleepWithCtx(ctx context.Context, start time.Time, maxSleep time.Duration) 
 
 type DialConfig struct {
 	Timeout        time.Duration
-	KeepAlive      time.Duration
+	KeepAlive      time.Duration //onlg change keepaliveIntvl, keepaliveIDEL, don't change keepaliveCnt(probes)
 	TcpUserTimeout time.Duration //for linux: use socket option: tcp_user_timeout
 	BackOff        backoffx.Backoffer
 	MaxDial        int64
