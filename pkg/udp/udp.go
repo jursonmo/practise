@@ -31,6 +31,43 @@ func Dial(network, raddr string, data []byte, write int) *net.UDPConn {
 	return uconn
 }
 
+func DialAndWriteBatch(network, raddr string, data []byte, write int) *net.UDPConn {
+	ra, err := net.ResolveUDPAddr(network, raddr)
+	if err != nil {
+		panic(err)
+	}
+	uconn, err := net.DialUDP(network, nil, ra)
+	if err != nil {
+		panic(err)
+	}
+	pc := ipv4.NewPacketConn(uconn)
+	buffers := make([][]byte, write)
+	for i := 0; i < write; i++ {
+		buffers[i] = data
+	}
+	wms := []ipv4.Message{
+		{
+			//Buffers: [][]byte{data, data}, //相当于由两个内存组成的一个报文
+			Buffers: buffers,
+			Addr:    ra,
+		},
+		{
+			//Buffers: [][]byte{data, data}, //相当于由两个内存组成的一个报文
+			Buffers: buffers,
+			Addr:    ra,
+		},
+	}
+	log.Printf("write %d packet", len(wms))
+	n, err := pc.WriteBatch(wms, 0)
+	if err != nil {
+		log.Panic(err)
+	}
+	if n != len(wms) {
+		log.Panicf("n=%d, len(wms)=%d", n, len(wms))
+	}
+	return uconn
+}
+
 func ListenReuseport(ctx context.Context, network, addr string, n int) error {
 	for i := 0; i < n; i++ {
 		//net.ListenPacket(network, addr)
@@ -46,7 +83,7 @@ func ListenReuseport(ctx context.Context, network, addr string, n int) error {
 				return opErr
 			},
 		}
-		conn, err := lc.ListenPacket(ctx, network, addr)
+		conn, err := lc.ListenPacket(ctx, network, addr) //返回的是net.UDPConn, 它实现了接口net.PacketConn
 		if err != nil {
 			return err
 		}
