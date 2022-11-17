@@ -243,13 +243,15 @@ func (l *Listener) readLoop() {
 
 func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	var uc *UDPConn
-	raddr := addr.String()
-	v, ok := l.clients.Load(raddr)
+	//raddr := addr.String() //net.UDPConn.String() 方法会产生很多小对象, 不如把addr 转化一下
+	udpaddr := addr.(*net.UDPAddr)
+	key := udpAddrTrans(udpaddr)
+	v, ok := l.clients.Load(key)
 	if !ok {
 		//new udpConn
-		uc = NewUDPConn(l, l.lconn, addr)
+		uc = NewUDPConn(l, l.lconn, udpaddr)
 		log.Printf("%v, new conn:%v", l, addr)
-		l.clients.Store(raddr, uc)
+		l.clients.Store(key, uc)
 		l.accept <- uc
 	} else {
 		uc = v.(*UDPConn)
@@ -259,8 +261,8 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	uc.PutRxQueue(d)
 }
 
-func (l *Listener) deleteConn(key string) {
-	log.Printf("id:%d, del: %s, local:%s, remote: %s", l.id, l.LocalAddr().Network(), l.LocalAddr().String(), key)
+func (l *Listener) deleteConn(key interface{}) {
+	log.Printf("id:%d, del: %s, local:%s, remote: %v", l.id, l.LocalAddr().Network(), l.LocalAddr().String(), key)
 	l.clients.Delete(key)
 }
 

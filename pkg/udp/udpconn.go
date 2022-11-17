@@ -18,7 +18,7 @@ type UDPConn struct {
 	ln    *Listener
 	lconn *net.UDPConn
 	pc    *ipv4.PacketConn
-	raddr net.Addr
+	raddr *net.UDPAddr
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
@@ -29,7 +29,7 @@ type UDPConn struct {
 	dead     chan struct{}
 }
 
-func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr net.Addr) *UDPConn {
+func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr) *UDPConn {
 	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1)}
 	uc.rxqueue = make(chan bufferpool.MyBuffer, 256)
 	uc.rxqueueB = make(chan []byte, 128)
@@ -55,7 +55,7 @@ func (c *UDPConn) Close() error {
 
 	close(c.dead)
 	if c.ln != nil {
-		c.ln.deleteConn(c.raddr.String())
+		c.ln.deleteConn(udpAddrTrans(c.raddr))
 	}
 	if c.client && c.lconn != nil {
 		c.lconn.Close()
