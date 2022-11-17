@@ -22,14 +22,17 @@ type UDPConn struct {
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
-	rxqueue chan bufferpool.MyBuffer
-	client  bool
-	closed  bool
-	dead    chan struct{}
+	rxqueue  chan bufferpool.MyBuffer
+	rxqueueB chan []byte
+	client   bool
+	closed   bool
+	dead     chan struct{}
 }
 
 func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr net.Addr) *UDPConn {
 	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1)}
+	uc.rxqueue = make(chan bufferpool.MyBuffer, 256)
+	uc.rxqueueB = make(chan []byte, 128)
 	if uc.ln == nil {
 		uc.client = true
 	}
@@ -38,6 +41,7 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr net.Addr) *UDPConn {
 }
 
 func (c *UDPConn) PutRxQueue(data []byte) {
+	c.rxqueueB <- data
 }
 
 func (c *UDPConn) Close() error {
@@ -69,6 +73,10 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 
 func (c *UDPConn) Read(buf []byte) (n int, err error) {
 	select {
+	case b := <-c.rxqueueB:
+		n = copy(buf, b)
+		//todo
+		return
 	case b := <-c.rxqueue:
 		n, err = b.Read(buf)
 		//todo

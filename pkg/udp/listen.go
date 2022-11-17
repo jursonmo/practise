@@ -49,6 +49,10 @@ type UdpListen struct {
 	cfg       ListenConfig
 }
 
+func (l *UdpListen) String() string {
+	return fmt.Sprintf("udp leader listener, listeners:%d, local:%s, reuseport:%v", l.cfg.listenerNum, l.Addr(), l.cfg.reuseport)
+}
+
 func NewUdpListen(ctx context.Context, network, addr string, opts ...LnCfgOptions) (*UdpListen, error) {
 	cfg := ListenConfig{network: network, addr: addr}
 	for _, opt := range opts {
@@ -59,7 +63,7 @@ func NewUdpListen(ctx context.Context, network, addr string, opts ...LnCfgOption
 		return nil, err
 	}
 
-	ln := &UdpListen{ctx: ctx, cfg: cfg}
+	ln := &UdpListen{ctx: ctx, cfg: cfg, accept: make(chan net.Conn, 256), dead: make(chan struct{}, 1)}
 	err = ln.Start()
 	if err != nil {
 		return nil, err
@@ -209,15 +213,16 @@ func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt)
 	}
 	l.lconn = conn.(*net.UDPConn)
 	l.pc = ipv4.NewPacketConn(conn)
-	l.readLoop()
+	go l.readLoop()
 	return l, nil
 }
 
 func (l *Listener) readLoop() {
 	readBatchs := 8
+	maxBufSize := 1600
 	rms := make([]ipv4.Message, readBatchs)
 	for i := 0; i < 8; i++ {
-		rms[i] = ipv4.Message{Buffers: [][]byte{make([]byte, 1600)}}
+		rms[i] = ipv4.Message{Buffers: [][]byte{make([]byte, maxBufSize)}}
 	}
 	for {
 		n, err := l.pc.ReadBatch(rms, 0)
@@ -243,11 +248,15 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	if !ok {
 		//new udpConn
 		uc = NewUDPConn(l, l.lconn, addr)
+		log.Printf("%v, new conn:%v", l, addr)
+		l.clients.Store(raddr, uc)
 		l.accept <- uc
 	} else {
 		uc = v.(*UDPConn)
 	}
-	uc.PutRxQueue(data)
+	d := make([]byte, len(data))
+	copy(d, data)
+	uc.PutRxQueue(d)
 }
 
 func (l *Listener) deleteConn(key string) {
