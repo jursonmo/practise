@@ -40,9 +40,9 @@ func handle(conn net.Conn) {
 
 	go func() {
 		bw := udp.NewBufioWriter(conn, 8)
-		time.Sleep(time.Second) //等ch 里有一定的数据，这样测试flush -->WriteBatch
+		time.Sleep(time.Second) //等ch 里有一定的数据，这样测试 bufio -->flush -->WriteBatch
 		for data := range ch {
-			_, err := bw.Write(data)
+			_, err := bw.Write(data) //测试通过bufio 来WriteBatch,减少系统调用
 			if err != nil {
 				log.Println(err)
 				return
@@ -57,7 +57,12 @@ func handle(conn net.Conn) {
 		}
 	}()
 
-	//目前读只能一个个读了，写可以batch write
+	//对于accept 产生的net.Conn
+	//目前不能通过bufio 达到手动调用readBatch 以减少系统调用的目的,
+	//这里看似一个一个Read, 实际并也不是每次read 都发生一次系统调用
+	//因为默认后台已经有个任务在listen socket 上readBatch 了。
+	//(listen socket是任意client packet 进来的接口, 是判断是否产生新UDPConn 关键）
+	//但可以手动调用batch write 到达减少系统调用
 	br := udp.NewBufioReader(conn, 8, 1024)
 	if br == nil {
 		log.Printf("NewBufioReader return nil")
