@@ -14,25 +14,63 @@ import (
 var ErrConnClosed = errors.New("Conn Closed")
 
 type UDPConn struct {
-	mux   sync.Mutex
-	ln    *Listener
-	lconn *net.UDPConn
-	pc    *ipv4.PacketConn
-	raddr *net.UDPAddr
+	mux    sync.Mutex
+	ln     *Listener
+	client bool //client 表示lconn is conneted(绑定了目的地址), 即可以直接用Write，不需要WriteTo
+	lconn  *net.UDPConn
+	pc     *ipv4.PacketConn
+	raddr  *net.UDPAddr
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
-	rxqueue  chan bufferpool.MyBuffer
-	rxqueueB chan []byte
-	client   bool
-	closed   bool
-	dead     chan struct{}
+	rxqueue    chan bufferpool.MyBuffer
+	rxqueueB   chan []byte
+	rxhandler  func([]byte)
+	rxqueuelen int
+	readBatchs int
+	maxBufSize int
+
+	closed bool
+	dead   chan struct{}
 }
 
-func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr) *UDPConn {
-	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1)}
-	uc.rxqueue = make(chan bufferpool.MyBuffer, 256)
-	uc.rxqueueB = make(chan []byte, 128)
+type UDPConnOpt func(*UDPConn)
+
+func WithRxQueueLen(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.rxqueuelen = n
+	}
+}
+
+func WithReadBatchs(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.readBatchs = n
+	}
+}
+func WithMaxPacketSize(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.maxBufSize = n
+	}
+}
+
+func WithRxHandler(h func([]byte)) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.rxhandler = h
+	}
+}
+
+func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UDPConnOpt) *UDPConn {
+	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1),
+		rxqueuelen: 256,
+		readBatchs: 8,
+		maxBufSize: 1600,
+	}
+	uc.rxhandler = uc.handlePacket
+	for _, opt := range opts {
+		opt(uc)
+	}
+	uc.rxqueue = make(chan bufferpool.MyBuffer, uc.rxqueuelen)
+	uc.rxqueueB = make(chan []byte, uc.rxqueuelen)
 	if uc.ln == nil {
 		uc.client = true
 	}
@@ -101,63 +139,5 @@ func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	return nil
 }
 func (c *UDPConn) SetWriteDeadline(t time.Time) error {
-	return nil
-}
-
-/* 实现bufio部分接口，让应用层像使用bufio 一样使用UDPConn
-func (*bufio.Writer).Write(b []byte)(int, error)
-func (*bufio.Writer).Buffered() int
-func (*bufio.Writer).Flush() error
-*/
-type UDPBufioWriter struct {
-	c      *UDPConn
-	batchs int
-	wms    []ipv4.Message
-	err    error
-}
-
-func NewUDPBufioWriter(c *UDPConn, batchs int) *UDPBufioWriter {
-	ub := &UDPBufioWriter{c: c, batchs: batchs}
-	ub.wms = make([]ipv4.Message, 0, batchs)
-
-	return ub
-}
-
-func (ub *UDPBufioWriter) Write(b []byte) (int, error) {
-	if ub.err != nil {
-		return 0, ub.err
-	}
-	ms := ipv4.Message{Buffers: [][]byte{b}}
-	ub.wms = append(ub.wms, ms)
-	if len(ub.wms) == ub.batchs {
-		if err := ub.Flush(); err != nil {
-			return 0, err
-		}
-	}
-	return len(b), nil
-}
-
-func (ub *UDPBufioWriter) Buffered() int {
-	return len(ub.wms)
-}
-
-func (ub *UDPBufioWriter) Flush() error {
-	if ub.err != nil {
-		return ub.err
-	}
-	wn := len(ub.wms)
-	send := 0
-	for {
-		n, err := ub.c.pc.WriteBatch(ub.wms[send:wn], 0)
-		if err != nil {
-			ub.err = err
-			return err
-		}
-		send += n
-		if send == wn {
-			ub.wms = ub.wms[:0]
-			return nil
-		}
-	}
 	return nil
 }
