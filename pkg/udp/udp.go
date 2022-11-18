@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// 主要是给测试提供方法
 func Dial(network, raddr string, data []byte, write int) *net.UDPConn {
 	ra, err := net.ResolveUDPAddr(network, raddr)
 	if err != nil {
@@ -83,7 +84,7 @@ func ListenReuseport(ctx context.Context, network, addr string, n int) error {
 				return opErr
 			},
 		}
-		conn, err := lc.ListenPacket(ctx, network, addr) //返回的是net.UDPConn, 它实现了接口net.PacketConn
+		conn, err := lc.ListenPacket(ctx, network, addr) //返回的是net.UDPConn 结构体, 它实现了接口net.PacketConn
 		if err != nil {
 			return err
 		}

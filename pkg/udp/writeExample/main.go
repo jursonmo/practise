@@ -15,6 +15,7 @@ var (
 	writeNum  = flag.Int("w", 2, "one udp client write data times")
 )
 
+//测试 WriteBatch
 func main() {
 	flag.Parse()
 	err := udp.ListenReuseport(context.Background(), "udp", "0.0.0.0:2222", *listenNum)
