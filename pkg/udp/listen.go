@@ -246,7 +246,10 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	// go tool pprof -alloc_objects http://192.168.64.5:6061/debug/pprof/heap
 	//raddr := addr.String() //net.UDPConn.String() 方法会产生很多小对象, 不如把addr 转化一下
 	udpaddr := addr.(*net.UDPAddr)
-	key := udpAddrTrans(udpaddr)
+	key, ok := udpAddrTrans(udpaddr)
+	if !ok {
+		return
+	}
 	v, ok := l.clients.Load(key)
 	if !ok {
 		//new udpConn

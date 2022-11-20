@@ -93,7 +93,9 @@ func (c *UDPConn) Close() error {
 
 	close(c.dead)
 	if c.ln != nil {
-		c.ln.deleteConn(udpAddrTrans(c.raddr))
+		if key, ok := udpAddrTrans(c.raddr); ok {
+			c.ln.deleteConn(key)
+		}
 	}
 	if c.client && c.lconn != nil {
 		c.lconn.Close()
