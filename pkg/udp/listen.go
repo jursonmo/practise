@@ -263,7 +263,7 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	}
 }
 
-func (l *Listener) deleteConn(key interface{}) {
+func (l *Listener) deleteConn(key AddrKey /*interface{}*/) {
 	log.Printf("id:%d, del: %s, local:%s, remote: %v", l.id, l.LocalAddr().Network(), l.LocalAddr().String(), key)
 	l.clients.Delete(key)
 }
