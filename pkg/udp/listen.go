@@ -221,7 +221,7 @@ func (l *Listener) readLoop() {
 	readBatchs := 8
 	maxBufSize := 1600
 	rms := make([]ipv4.Message, readBatchs)
-	for i := 0; i < 8; i++ {
+	for i := 0; i < len(rms); i++ {
 		rms[i] = ipv4.Message{Buffers: [][]byte{make([]byte, maxBufSize)}}
 	}
 	for {
@@ -230,7 +230,7 @@ func (l *Listener) readLoop() {
 			l.Close()
 			panic(err)
 		}
-		log.Printf("id:%d, got n:%d, len(ms):%d\n", l.id, n, len(rms))
+		log.Printf("id:%d, batch got n:%d, len(ms):%d\n", l.id, n, len(rms))
 
 		if n == 0 {
 			continue
@@ -243,6 +243,7 @@ func (l *Listener) readLoop() {
 
 func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	var uc *UDPConn
+	// go tool pprof -alloc_objects http://192.168.64.5:6061/debug/pprof/heap
 	//raddr := addr.String() //net.UDPConn.String() 方法会产生很多小对象, 不如把addr 转化一下
 	udpaddr := addr.(*net.UDPAddr)
 	key := udpAddrTrans(udpaddr)
@@ -256,9 +257,10 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	} else {
 		uc = v.(*UDPConn)
 	}
-	d := make([]byte, len(data))
-	copy(d, data)
-	uc.PutRxQueue(d)
+
+	if uc.rxhandler != nil {
+		uc.rxhandler(data)
+	}
 }
 
 func (l *Listener) deleteConn(key interface{}) {
@@ -296,6 +298,7 @@ func (l *Listener) Close() error {
 	}
 	l.closed = true
 	l.Unlock()
+
 	log.Printf("%v closing....", l)
 	defer log.Printf("%v over", l)
 	close(l.dead)
