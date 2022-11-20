@@ -11,6 +11,7 @@ type AddrKey struct {
 	port uint32
 }
 
+//func udpAddrTrans(addr *net.UDPAddr) interface{} {//用interface{}导致AddrKey{} escape to heap
 func udpAddrTrans(addr *net.UDPAddr) AddrKey {
 	ip4 := addr.IP.To4()
 	ip := binary.BigEndian.Uint32(ip4)
