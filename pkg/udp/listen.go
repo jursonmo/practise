@@ -285,6 +285,15 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	if len(data) == 0 {
 		return
 	}
+
+	uc = l.getUDPConn(addr)
+
+	if uc.rxhandler != nil {
+		uc.rxhandler(data)
+	}
+}
+
+func (l *Listener) getUDPConn(addr net.Addr) (uc *UDPConn) {
 	// go tool pprof -alloc_objects http://192.168.64.5:6061/debug/pprof/heap
 	//raddr := addr.String() //net.UDPConn.String() 方法会产生很多小对象, 不如把addr 转化一下
 	udpaddr := addr.(*net.UDPAddr)
@@ -302,10 +311,7 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	} else {
 		uc = v.(*UDPConn)
 	}
-
-	if uc.rxhandler != nil {
-		uc.rxhandler(data)
-	}
+	return uc
 }
 
 func (l *Listener) deleteConn(key AddrKey /*interface{}*/) {
