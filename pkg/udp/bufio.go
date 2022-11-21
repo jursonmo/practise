@@ -29,7 +29,7 @@ func NewBufioWriter(conn net.Conn, batchs int) *UDPBufioWriter {
 
 func NewUDPBufioWriter(c *UDPConn, batchs int) *UDPBufioWriter {
 	if batchs == 0 {
-		batchs = c.readBatchs
+		batchs = c.writeBatchs
 	}
 	if batchs == 0 {
 		panic("batchs == 0")
