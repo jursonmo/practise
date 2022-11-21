@@ -23,12 +23,13 @@ type UDPConn struct {
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
-	rxqueue    chan bufferpool.MyBuffer
-	rxqueueB   chan []byte
-	rxhandler  func([]byte)
-	rxqueuelen int
-	readBatchs int
-	maxBufSize int
+	rxqueue     chan bufferpool.MyBuffer
+	rxqueueB    chan []byte
+	rxhandler   func([]byte)
+	rxqueuelen  int
+	readBatchs  int
+	writeBatchs int
+	maxBufSize  int
 
 	closed bool
 	dead   chan struct{}
@@ -42,11 +43,24 @@ func WithRxQueueLen(n int) UDPConnOpt {
 	}
 }
 
+func WithBatchs(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.readBatchs = n
+		u.writeBatchs = n
+	}
+}
+
 func WithReadBatchs(n int) UDPConnOpt {
 	return func(u *UDPConn) {
 		u.readBatchs = n
 	}
 }
+func WithWriteBatchs(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.writeBatchs = n
+	}
+}
+
 func WithMaxPacketSize(n int) UDPConnOpt {
 	return func(u *UDPConn) {
 		u.maxBufSize = n
@@ -61,9 +75,10 @@ func WithRxHandler(h func([]byte)) UDPConnOpt {
 
 func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UDPConnOpt) *UDPConn {
 	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1),
-		rxqueuelen: 256,
-		readBatchs: 8,
-		maxBufSize: 1600,
+		rxqueuelen:  256,
+		readBatchs:  defaultBatchs,
+		writeBatchs: defaultBatchs,
+		maxBufSize:  defaultMaxPacketSize,
 	}
 	uc.rxhandler = uc.handlePacket
 	for _, opt := range opts {

@@ -30,12 +30,26 @@ func WithListenerNum(n int) LnCfgOptions {
 	}
 }
 
+func Batchs(n int) LnCfgOptions {
+	return func(lc *ListenConfig) {
+		lc.batchs = n
+	}
+}
+
+func MaxPacketSize(n int) LnCfgOptions {
+	return func(lc *ListenConfig) {
+		lc.maxPacketSize = n
+	}
+}
+
 type ListenConfig struct {
 	network string
 	addr    string
 	//raddr     string
-	reuseport   bool
-	listenerNum int
+	reuseport     bool
+	listenerNum   int
+	batchs        int //one
+	maxPacketSize int
 }
 
 type UdpListen struct {
@@ -80,7 +94,8 @@ func (ln *UdpListen) Start() error {
 	ln.laddr = laddr
 	ln.listeners = make([]*Listener, cfg.listenerNum)
 	for i := 0; i < cfg.listenerNum; i++ {
-		l, err := NewListener(ln.ctx, cfg.network, cfg.addr, WithId(i))
+		l, err := NewListener(ln.ctx, cfg.network, cfg.addr,
+			WithId(i), WithLnBatchs(cfg.batchs), WithLnMaxPacketSize(cfg.maxPacketSize))
 		if err != nil {
 			log.Println(err)
 			continue
@@ -103,6 +118,14 @@ func (cfg *ListenConfig) Tidy() error {
 	if cfg.reuseport && cfg.listenerNum == 0 {
 		cfg.listenerNum = runtime.GOMAXPROCS(0)
 	}
+
+	if cfg.batchs == 0 {
+		cfg.batchs = defaultBatchs
+	}
+	if cfg.maxPacketSize == 0 {
+		cfg.maxPacketSize = defaultMaxPacketSize
+	}
+
 	return nil
 }
 
@@ -177,10 +200,12 @@ type Listener struct {
 	lconn *net.UDPConn
 	pc    *ipv4.PacketConn
 	//ln      net.Listener
-	clients sync.Map
-	accept  chan *UDPConn
-	dead    chan struct{}
-	closed  bool
+	clients       sync.Map
+	accept        chan *UDPConn
+	batchs        int
+	maxPacketSize int
+	dead          chan struct{}
+	closed        bool
 }
 type ListenerOpt func(*Listener)
 
@@ -189,6 +214,19 @@ func WithId(id int) ListenerOpt {
 		l.id = id
 	}
 }
+
+func WithLnBatchs(n int) ListenerOpt {
+	return func(l *Listener) {
+		l.batchs = n
+	}
+}
+
+func WithLnMaxPacketSize(n int) ListenerOpt {
+	return func(l *Listener) {
+		l.maxPacketSize = n
+	}
+}
+
 func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt) (*Listener, error) {
 	l := &Listener{}
 	for _, opt := range opts {
@@ -218,12 +256,13 @@ func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt)
 }
 
 func (l *Listener) readLoop() {
-	readBatchs := 8
-	maxBufSize := 1600
+	readBatchs := l.batchs
+	maxPacketSize := l.maxPacketSize
 	rms := make([]ipv4.Message, readBatchs)
 	for i := 0; i < len(rms); i++ {
-		rms[i] = ipv4.Message{Buffers: [][]byte{make([]byte, maxBufSize)}}
+		rms[i] = ipv4.Message{Buffers: [][]byte{make([]byte, maxPacketSize)}}
 	}
+	log.Printf("listener, id:%d, batchs:%d, maxPacketSize:%d, readLoop....", l.id, l.batchs, l.maxPacketSize)
 	for {
 		n, err := l.pc.ReadBatch(rms, 0)
 		if err != nil {
@@ -243,6 +282,9 @@ func (l *Listener) readLoop() {
 
 func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	var uc *UDPConn
+	if len(data) == 0 {
+		return
+	}
 	// go tool pprof -alloc_objects http://192.168.64.5:6061/debug/pprof/heap
 	//raddr := addr.String() //net.UDPConn.String() 方法会产生很多小对象, 不如把addr 转化一下
 	udpaddr := addr.(*net.UDPAddr)
@@ -253,7 +295,7 @@ func (l *Listener) handlePacket(addr net.Addr, data []byte) {
 	v, ok := l.clients.Load(key)
 	if !ok {
 		//new udpConn
-		uc = NewUDPConn(l, l.lconn, udpaddr)
+		uc = NewUDPConn(l, l.lconn, udpaddr, WithBatchs(l.batchs), WithMaxPacketSize(l.maxPacketSize))
 		log.Printf("%v, new conn:%v", l, addr)
 		l.clients.Store(key, uc)
 		l.accept <- uc
