@@ -156,21 +156,19 @@ func (ub *UDPBufioReader) Read(buf []byte) (n int, err error) {
 }
 
 func (ub *UDPBufioReader) readBatchs() error {
-	pc := ub.pc
-	rms := ub.rms
 	for {
-		n, err := pc.ReadBatch(ub.rms, 0)
+		n, err := ub.pc.ReadBatch(ub.rms, 0)
 		if err != nil {
 			ub.err = err
 			return err
 		}
-		log.Printf("%v<-%v, batch got n:%d, len(ms):%d\n", ub.c.LocalAddr(), ub.c.RemoteAddr(), n, len(rms))
+		log.Printf("%v<-%v, batch got n:%d, len(ms):%d\n", ub.c.LocalAddr(), ub.c.RemoteAddr(), n, len(ub.rms))
 
-		if n == 0 {
-			continue
+		if n > 0 {
+			ub.have = n
+			ub.offset = 0
+			return nil
 		}
-		ub.have = n
-		ub.offset = 0
 	}
 }
 
