@@ -67,6 +67,7 @@ func (c *UDPConn) ReadBatchLoop(handler func(msg []byte)) error {
 }
 
 func (c *UDPConn) handlePacket(msg []byte) {
+	//分配新的内存对象,并且copy 一次
 	b := make([]byte, len(msg))
 	copy(b, msg)
 	c.PutRxQueue(b)

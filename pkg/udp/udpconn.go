@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	bufferpool "github.com/jursonmo/practise/pkg/bufferPool"
 	"golang.org/x/net/ipv4"
 )
 
@@ -23,7 +22,7 @@ type UDPConn struct {
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
-	rxqueue     chan bufferpool.MyBuffer
+	rxqueue     chan MyBuffer
 	rxqueueB    chan []byte
 	rxhandler   func([]byte)
 	rxqueuelen  int
@@ -84,7 +83,7 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UD
 	for _, opt := range opts {
 		opt(uc)
 	}
-	uc.rxqueue = make(chan bufferpool.MyBuffer, uc.rxqueuelen)
+	uc.rxqueue = make(chan MyBuffer, uc.rxqueuelen)
 	uc.rxqueueB = make(chan []byte, uc.rxqueuelen)
 	if uc.ln == nil {
 		uc.client = true
@@ -94,7 +93,11 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UD
 }
 
 func (c *UDPConn) PutRxQueue(data []byte) {
-	c.rxqueueB <- data
+	//非阻塞模式,避免某个UDPConn 的数据没有被处理而阻塞了listener 继续接受数据
+	select {
+	case c.rxqueueB <- data:
+	default:
+	}
 }
 
 func (c *UDPConn) Close() error {
@@ -134,7 +137,7 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 		return
 	case b := <-c.rxqueue:
 		n, err = b.Read(buf)
-		//todo
+		Release(b)
 		return
 	case <-c.dead:
 		return 0, ErrConnClosed

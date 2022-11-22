@@ -200,12 +200,14 @@ type Listener struct {
 	lconn *net.UDPConn
 	pc    *ipv4.PacketConn
 	//ln      net.Listener
-	clients       sync.Map
-	accept        chan *UDPConn
-	batchs        int
-	maxPacketSize int
-	dead          chan struct{}
-	closed        bool
+	clients        sync.Map
+	accept         chan *UDPConn
+	txqueue        chan MyBuffer
+	writeBatchAble bool // write batch is enable?
+	batchs         int
+	maxPacketSize  int
+	dead           chan struct{}
+	closed         bool
 }
 type ListenerOpt func(*Listener)
 
@@ -251,7 +253,8 @@ func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt)
 	}
 	l.lconn = conn.(*net.UDPConn)
 	l.pc = ipv4.NewPacketConn(conn)
-	go l.readLoop()
+	//go l.readLoop()
+	go l.readLoopv2()
 	return l, nil
 }
 
