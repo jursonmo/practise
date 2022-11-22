@@ -13,6 +13,13 @@ func (*bufio.Writer).Write(b []byte)(int, error)
 func (*bufio.Writer).Buffered() int
 func (*bufio.Writer).Flush() error
 */
+//这几个方法不是并发安全的, 最好是在同一个goroutine里串行
+type Bufioer interface {
+	Write(b []byte) (int, error)
+	Buffered() int
+	Flush() error
+}
+
 type UDPBufioWriter struct {
 	c      *UDPConn
 	batchs int
@@ -20,7 +27,7 @@ type UDPBufioWriter struct {
 	err    error
 }
 
-func NewBufioWriter(conn net.Conn, batchs int) *UDPBufioWriter {
+func NewBufioWriter(conn net.Conn, batchs int) Bufioer {
 	if v, ok := conn.(*UDPConn); ok {
 		return NewUDPBufioWriter(v, batchs)
 	}
