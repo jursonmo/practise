@@ -53,5 +53,7 @@ func (c *UDPConn) PutRxQueue2(b MyBuffer) {
 	select {
 	case c.rxqueue <- b:
 	default:
+		c.rxDrop += int64(len(b.Bytes()))
+		Release(b)
 	}
 }

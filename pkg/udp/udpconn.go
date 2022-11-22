@@ -26,6 +26,7 @@ type UDPConn struct {
 	rxqueueB    chan []byte
 	rxhandler   func([]byte)
 	rxqueuelen  int
+	rxDrop      int64
 	readBatchs  int
 	writeBatchs int
 	maxBufSize  int
