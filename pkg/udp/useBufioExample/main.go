@@ -107,13 +107,16 @@ func client() {
 	}()
 
 	ch := make(chan []byte, 10)
-	data := []byte("12345678")
+	data := []byte("abcdefg")
 	for i := 0; i < 10; i++ {
 		ch <- data
 	}
 
 	bw := udp.NewBufioWriter(conn, 8)
+	id := 48
 	for data := range ch {
+		data[len(data)-1] = byte(id)
+		id++
 		_, err = bw.Write(data)
 		if err != nil {
 			log.Println(err)

@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"bytes"
 	"io"
 	"log"
 	"net"
@@ -21,10 +22,11 @@ type Bufioer interface {
 }
 
 type UDPBufioWriter struct {
-	c      *UDPConn
-	batchs int
-	wms    []ipv4.Message
-	err    error
+	c       *UDPConn
+	batchs  int
+	wms     []ipv4.Message
+	buffers []*bytes.Buffer
+	err     error
 }
 
 func NewBufioWriter(conn net.Conn, batchs int) Bufioer {
@@ -43,7 +45,10 @@ func NewUDPBufioWriter(c *UDPConn, batchs int) *UDPBufioWriter {
 	}
 	ub := &UDPBufioWriter{c: c, batchs: batchs}
 	ub.wms = make([]ipv4.Message, 0, batchs)
-
+	ub.buffers = make([]*bytes.Buffer, batchs)
+	for i := 0; i < batchs; i++ {
+		ub.buffers[i] = bytes.NewBuffer(make([]byte, c.maxBufSize))
+	}
 	return ub
 }
 
@@ -57,7 +62,14 @@ func (ub *UDPBufioWriter) Write(b []byte) (int, error) {
 		//accept 到达UDPConn 的pc 是没有指定目的地址，发送数据时，需要 SetControlMessage 指定目的地址
 		dst = ub.c.raddr
 	}
-	ms := ipv4.Message{Buffers: [][]byte{b}, Addr: dst}
+	//copy data to buffer, and ipv4.Message refence buffer
+	n := len(ub.wms)
+	buffer := ub.buffers[n]
+	buffer.Reset()
+	buffer.Write(b)
+	//不能引用上层的b []byte,因为bufio要缓存一定的量才flush,所以要copy 上层的b []byte
+	//ms := ipv4.Message{Buffers: [][]byte{b}, Addr: dst}
+	ms := ipv4.Message{Buffers: [][]byte{buffer.Bytes()}, Addr: dst}
 	ub.wms = append(ub.wms, ms)
 	if len(ub.wms) == ub.batchs {
 		if err := ub.Flush(); err != nil {
