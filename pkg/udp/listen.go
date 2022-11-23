@@ -253,6 +253,10 @@ func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt)
 	}
 	l.lconn = conn.(*net.UDPConn)
 	l.pc = ipv4.NewPacketConn(conn)
+	{
+		l.txqueue = make(chan MyBuffer, 512)
+		go l.writeBatchLoop()
+	}
 	//go l.readLoop()
 	go l.readLoopv2()
 	return l, nil
@@ -272,7 +276,7 @@ func (l *Listener) readLoop() {
 			l.Close()
 			panic(err)
 		}
-		log.Printf("id:%d, batch got n:%d, len(ms):%d\n", l.id, n, len(rms))
+		log.Printf("listener id:%d, batch got n:%d, len(ms):%d\n", l.id, n, len(rms))
 
 		if n == 0 {
 			continue

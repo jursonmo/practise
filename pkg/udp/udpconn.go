@@ -146,6 +146,9 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 }
 
 func (c *UDPConn) Write(b []byte) (n int, err error) {
+	if c.ln != nil && c.ln.WriteBatchAble() {
+		return c.WriteWithBatch(b)
+	}
 	if c.client {
 		return c.lconn.Write(b)
 	}
