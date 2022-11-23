@@ -27,7 +27,7 @@ func (l *Listener) readLoopv2() {
 			l.Close()
 			panic(err)
 		}
-		log.Printf("id:%d, batch got n:%d, len(ms):%d\n", l.id, n, len(rms))
+		log.Printf("readLoopv2 listener id:%d, batch got n:%d, len(ms):%d\n", l.id, n, len(rms))
 
 		if n == 0 {
 			continue
