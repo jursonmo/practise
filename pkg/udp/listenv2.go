@@ -41,11 +41,7 @@ func (l *Listener) readLoopv2() {
 
 func (l *Listener) handleBuffer(addr net.Addr, b MyBuffer) {
 	uc := l.getUDPConn(addr)
-	uc.handleMyBuffer(b)
-}
-
-func (c *UDPConn) handleMyBuffer(b MyBuffer) {
-	c.PutRxQueue2(b)
+	uc.PutRxQueue2(b)
 }
 
 func (c *UDPConn) PutRxQueue2(b MyBuffer) {
