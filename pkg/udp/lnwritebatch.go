@@ -49,6 +49,7 @@ func (l *Listener) writeBatchLoop() {
 	bw, _ := NewPCBioWriter(l.pc, l.batchs)
 	l.writeBatchAble = true
 	defer func() { l.writeBatchAble = false }()
+	defer log.Printf("listener %v, writeBatchLoop quit", l.pc.LocalAddr())
 
 	for b := range l.txqueue {
 		//为什么不把"data[]byte 转换成Mybuffer" 放在WriteWithBatch()实现,而不放在这里实现呢,如果放在这里实现，PCBufioWriter 就可以实现bufioer 接口了
@@ -71,6 +72,7 @@ func (l *Listener) writeBatchLoop() {
 }
 
 type writeBatchMsg struct {
+	offset  int //send offset
 	wms     []ipv4.Message
 	buffers []MyBuffer
 }
@@ -89,13 +91,15 @@ func NewPCBioWriter(pc *ipv4.PacketConn, batchs int) (*PCBufioWriter, error) {
 	}
 	bw := &PCBufioWriter{pc: pc, batchs: batchs}
 
-	bw.wms = make([]ipv4.Message, 0, batchs)
-	bw.buffers = make([]MyBuffer, 0, batchs)
+	// bw.wms = make([]ipv4.Message, 0, batchs)
+	// bw.buffers = make([]MyBuffer, 0, batchs)
+	bw.writeBatchMsg.init(batchs)
 	return bw, nil
 }
 
 //由于*PCBufioWriter 只能实现Write(b MyBuffer)，而不是Write([]byte) (n int, err error)
 //所以*PCBufioWriter 并没有实现 Bufioer 接口。
+/*
 func (bw *PCBufioWriter) Write(b MyBuffer) (n int, err error) {
 	if bw.err != nil {
 		return 0, bw.err
@@ -142,5 +146,95 @@ func (bw *PCBufioWriter) Flush() error {
 func (bw *PCBufioWriter) ReleaseMyBuffer(from, to int) {
 	for i := from; i < to; i++ {
 		Release(bw.buffers[i])
+	}
+}
+*/
+
+//由于*PCBufioWriter 只能实现Write(b MyBuffer)，而不是Write([]byte) (n int, err error)
+//所以*PCBufioWriter 并没有实现 Bufioer 接口。
+func (bw *PCBufioWriter) Write(b MyBuffer) (n int, err error) {
+	if bw.err != nil {
+		return 0, bw.err
+	}
+	if flush := bw.addMsg(b); flush {
+		if err := bw.Flush(); err != nil {
+			return 0, err
+		}
+	}
+	return len(b.Bytes()), nil
+}
+
+func (bw *PCBufioWriter) Buffered() int {
+	return bw.buffered()
+}
+
+func (bw *PCBufioWriter) Flush() error {
+	log.Printf("listener %v, flushing %d packet....", bw.pc.LocalAddr(), len(bw.wms))
+	if bw.err != nil {
+		return bw.err
+	}
+
+	for {
+		msgs := bw.msgBuffered()
+		if len(msgs) == 0 {
+			return nil
+		}
+		n, err := bw.pc.WriteBatch(msgs, 0)
+		if err != nil {
+			bw.err = err
+			return err
+		}
+		bw.commit(n)
+	}
+}
+
+func (w *writeBatchMsg) init(capability int) {
+	w.offset = 0
+	w.wms = make([]ipv4.Message, 0, capability)
+	w.buffers = make([]MyBuffer, 0, capability)
+}
+
+func (w *writeBatchMsg) buffered() int {
+	return len(w.msgBuffered())
+}
+
+func (w *writeBatchMsg) addMsg(b MyBuffer) (flush bool) {
+	ms := ipv4.Message{Buffers: [][]byte{b.Bytes()}, Addr: b.GetAddr()}
+	w.wms = append(w.wms, ms)
+	w.buffers = append(w.buffers, b)
+	if len(w.wms) == cap(w.wms) {
+		return true
+	}
+	return false
+}
+
+//获取需要发送的消息
+func (w *writeBatchMsg) msgBuffered() []ipv4.Message {
+	return w.wms[w.offset:]
+}
+
+func (w *writeBatchMsg) commit(sended int) {
+	if sended == 0 {
+		return
+	}
+	//已经发生的消息，可以释放
+	for i := w.offset; i < w.offset+sended; i++ {
+		w.wms[i].Buffers[0] = nil //set nil for gc
+		Release(w.buffers[i])     //release buffer to pool
+	}
+
+	//update offset
+	w.offset += sended
+
+	//just check
+	if w.offset > len(w.wms) {
+		log.Panicf("w.offset:%d, > len(w.wms):%d", w.offset, len(w.wms))
+	}
+
+	//已经全部发完了，重置
+	if w.offset == len(w.wms) {
+		w.offset = 0
+		w.wms = w.wms[:0]
+		w.buffers = w.buffers[:0]
 	}
 }
