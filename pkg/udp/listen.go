@@ -361,7 +361,9 @@ func (l *Listener) Close() error {
 	defer log.Printf("%v over", l)
 	close(l.dead)
 	close(l.accept)
-
+	if l.txqueue != nil {
+		close(l.txqueue)
+	}
 	return l.lconn.Close()
 }
 
