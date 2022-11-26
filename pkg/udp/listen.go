@@ -326,7 +326,7 @@ func (l *Listener) getUDPConn(addr net.Addr) (uc *UDPConn) {
 	v, ok := l.clients.Load(key)
 	if !ok {
 		//new udpConn
-		uc = NewUDPConn(l, l.lconn, udpaddr, WithBatchs(l.batchs), WithMaxPacketSize(l.maxPacketSize))
+		uc = NewUDPConn(l, l.lconn, udpaddr, WithBatchs(0), WithMaxPacketSize(l.maxPacketSize))
 		log.Printf("%v, new conn:%v", l, addr)
 		l.clients.Store(key, uc)
 		l.accept <- uc

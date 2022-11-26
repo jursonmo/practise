@@ -22,8 +22,13 @@ func (c *UDPConn) WriteWithBatch(data []byte) (n int, err error) {
 		panic(err)
 		//return
 	}
-	b.SetAddr(c.raddr)
-	err = c.ln.PutTxQueue(b)
+
+	if c.ln != nil {
+		b.SetAddr(c.raddr)
+		err = c.ln.PutTxQueue(b)
+	} else {
+		err = c.PutTxQueue(b)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -45,30 +50,33 @@ func (l *Listener) WriteBatchAble() bool {
 }
 
 func (l *Listener) writeBatchLoop() {
-	var err error
 	bw, _ := NewPCBioWriter(l.pc, l.batchs)
 	l.writeBatchAble = true
 	defer func() { l.writeBatchAble = false }()
 	defer log.Printf("listener %v, writeBatchLoop quit", l.pc.LocalAddr())
 
-	for b := range l.txqueue {
-		//为什么不把"data[]byte 转换成Mybuffer" 放在WriteWithBatch()实现,而不放在这里实现呢,如果放在这里实现，PCBufioWriter 就可以实现bufioer 接口了
-		//因为上层调用write(data []byte)后，默认是data 被发送出去了,并认为可以重用这个data的
-		//如果把[]byte 放在txqueue 队列里, 那么这个data []byte 在生成MyBuffer前，可能被修改了.
-		_, err = bw.Write(b)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if len(l.txqueue) == 0 && bw.Buffered() > 0 {
-			err = bw.Flush()
+	bw.WriteBatchLoop(l.txqueue)
+	/*
+		var err error
+		for b := range l.txqueue {
+			//为什么不把"data[]byte 转换成Mybuffer" 放在WriteWithBatch()实现,而不放在这里实现呢,
+			//如果放在这里实现，PCBufioWriter 就可以实现bufioer 接口了
+			//因为上层调用write(data []byte)后，默认是data 被发送出去了,并认为可以重用这个data的
+			//如果把[]byte 放在txqueue 队列里, 那么这个data []byte 在生成MyBuffer前，可能被修改了.
+			_, err = bw.Write(b)
 			if err != nil {
 				log.Println(err)
 				return
 			}
+			if len(l.txqueue) == 0 && bw.Buffered() > 0 {
+				err = bw.Flush()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+			}
 		}
-	}
-
+	*/
 }
 
 type writeBatchMsg struct {
@@ -236,5 +244,27 @@ func (w *writeBatchMsg) commit(sended int) {
 		w.offset = 0
 		w.wms = w.wms[:0]
 		w.buffers = w.buffers[:0]
+	}
+}
+
+func (bw *PCBufioWriter) WriteBatchLoop(fromCh chan MyBuffer) {
+	var err error
+	for b := range fromCh {
+		//为什么不把"data[]byte 转换成Mybuffer" 放在WriteWithBatch()实现,而不放在这里实现呢,
+		//如果放在这里实现，PCBufioWriter 就可以实现bufioer 接口了
+		//因为上层调用write(data []byte)后，默认是data 被发送出去了,并认为可以重用这个data的
+		//如果把[]byte 放在txqueue 队列里, 那么这个data []byte 在生成MyBuffer前，可能被修改了.
+		_, err = bw.Write(b)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if len(fromCh) == 0 && bw.Buffered() > 0 {
+			err = bw.Flush()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		}
 	}
 }

@@ -22,6 +22,8 @@ type UDPConn struct {
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
+	txqueue     chan MyBuffer
+	txqueuelen  int
 	rxqueue     chan MyBuffer
 	rxqueueB    chan []byte
 	rxhandler   func([]byte)
@@ -40,6 +42,12 @@ type UDPConnOpt func(*UDPConn)
 func WithRxQueueLen(n int) UDPConnOpt {
 	return func(u *UDPConn) {
 		u.rxqueuelen = n
+	}
+}
+
+func WithTxQueueLen(n int) UDPConnOpt {
+	return func(u *UDPConn) {
+		u.txqueuelen = n
 	}
 }
 
@@ -76,6 +84,7 @@ func WithRxHandler(h func([]byte)) UDPConnOpt {
 func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UDPConnOpt) *UDPConn {
 	uc := &UDPConn{ln: ln, lconn: lconn, raddr: raddr, dead: make(chan struct{}, 1),
 		rxqueuelen:  256,
+		txqueuelen:  256,
 		readBatchs:  defaultBatchs,
 		writeBatchs: defaultBatchs,
 		maxBufSize:  defaultMaxPacketSize,
@@ -86,10 +95,21 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UD
 	}
 	uc.rxqueue = make(chan MyBuffer, uc.rxqueuelen)
 	uc.rxqueueB = make(chan []byte, uc.rxqueuelen)
-	if uc.ln == nil {
-		uc.client = true
-	}
 	uc.pc = ipv4.NewPacketConn(lconn)
+
+	if uc.ln == nil {
+		//client dial
+		uc.client = true
+		if uc.readBatchs > 0 {
+			//todo:
+		}
+		if uc.writeBatchs > 0 {
+			//todo:
+			//后台起一个goroutine 负责批量写，上层直接write 就行。
+			uc.txqueue = make(chan MyBuffer, uc.txqueuelen)
+			go uc.writeBatchLoop()
+		}
+	}
 	return uc
 }
 
@@ -111,6 +131,10 @@ func (c *UDPConn) Close() error {
 	c.mux.Unlock()
 
 	close(c.dead)
+	if c.txqueue != nil {
+		close(c.txqueue)
+	}
+
 	if c.ln != nil {
 		if key, ok := udpAddrTrans(c.raddr); ok {
 			c.ln.deleteConn(key)
@@ -148,6 +172,9 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 func (c *UDPConn) Write(b []byte) (n int, err error) {
 	//client conn
 	if c.client {
+		if c.writeBatchs > 0 {
+			return c.WriteWithBatch(b)
+		}
 		return c.lconn.Write(b)
 	}
 
@@ -156,6 +183,23 @@ func (c *UDPConn) Write(b []byte) (n int, err error) {
 		return c.WriteWithBatch(b)
 	}
 	return c.lconn.WriteTo(b, c.raddr)
+}
+
+func (c *UDPConn) writeBatchLoop() {
+	defer log.Printf("client %v, writeBatchLoop quit", c.pc.LocalAddr())
+	bw, _ := NewPCBioWriter(c.pc, c.writeBatchs)
+	bw.WriteBatchLoop(c.txqueue)
+}
+
+//todo: 返回的error 应该实现net.Error temporary(), 这样上层Write可以认为Eagain,再次调用Write
+func (c *UDPConn) PutTxQueue(b MyBuffer) error {
+	select {
+	case c.txqueue <- b:
+	default:
+		Release(b)
+		return ErrTxQueueFull
+	}
+	return nil
 }
 
 func (c *UDPConn) SetDeadline(t time.Time) error {
