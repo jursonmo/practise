@@ -29,8 +29,8 @@ type UDPConn struct {
 	rxhandler   func([]byte)
 	rxqueuelen  int
 	rxDrop      int64
-	readBatchs  int
-	writeBatchs int
+	readBatchs  int //表示是否需要单独为此conn 后台起goroutine来批量读
+	writeBatchs int //表示是否需要单独为此conn 后台起goroutine来批量写
 	maxBufSize  int
 
 	closed bool
@@ -101,10 +101,9 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UD
 		//client dial
 		uc.client = true
 		if uc.readBatchs > 0 {
-			//todo:
+			go uc.ReadBatchLoop(uc.rxhandler)
 		}
 		if uc.writeBatchs > 0 {
-			//todo:
 			//后台起一个goroutine 负责批量写，上层直接write 就行。
 			uc.txqueue = make(chan MyBuffer, uc.txqueuelen)
 			go uc.writeBatchLoop()

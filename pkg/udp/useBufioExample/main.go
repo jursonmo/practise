@@ -84,11 +84,11 @@ func handle(conn net.Conn) {
 }
 
 func client() {
-	//udp.WithRxHandler(nil) 表示不需要后台起一个goroutine 来负责批量读数据，由我自己手动调用read or readBatch
+	//udp.WithReadBatchs(0) 表示不需要后台起一个goroutine 来负责批量读数据，由我自己手动调用read or readBatch
 	//否则后台起一个goroutine 来负责读数据, conn.Read() 就可以读到数据，原应用层的代码就不需要改动
 	//udp.WithWriteBatchs(0) 表示不需要后台起一个goroutine 来负责批量写数据,自己NewBufioWriter来实现批量写
 	conn, err := udp.UdpDial(context.Background(), "udp", "", "127.0.0.1:3333",
-		udp.WithRxHandler(nil), udp.WithWriteBatchs(0))
+		udp.WithReadBatchs(0), udp.WithWriteBatchs(0))
 	if err != nil {
 		panic(err)
 	}

@@ -177,7 +177,7 @@ func (bw *PCBufioWriter) Buffered() int {
 }
 
 func (bw *PCBufioWriter) Flush() error {
-	log.Printf("listener %v, flushing %d packet....", bw.pc.LocalAddr(), len(bw.wms))
+	log.Printf("local %v, flushing %d packet....", bw.pc.LocalAddr(), len(bw.wms))
 	if bw.err != nil {
 		return bw.err
 	}

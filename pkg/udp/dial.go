@@ -32,9 +32,9 @@ func DialWithOpt(ctx context.Context, network, laddr, raddr string, opts ...UDPC
 	}
 
 	c := NewUDPConn(nil, lconn, ra, opts...)
-	if c.rxhandler != nil {
-		go c.ReadBatchLoop(c.rxhandler)
-	}
+	// if c.rxhandler != nil {
+	// 	go c.ReadBatchLoop(c.rxhandler)
+	// }
 	return c, nil
 }
 
@@ -53,7 +53,7 @@ func (c *UDPConn) ReadBatchLoop(handler func(msg []byte)) error {
 			c.Close()
 			return err
 		}
-		log.Printf("got n:%d, len(ms):%d\n", n, len(rms))
+		log.Printf("client ReadBatchLoop got n:%d, len(ms):%d\n", n, len(rms))
 
 		if n == 0 {
 			continue
