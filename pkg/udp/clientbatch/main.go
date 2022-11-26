@@ -37,13 +37,14 @@ func server() {
 
 func handle(conn net.Conn) {
 	buf := make([]byte, 1600)
+	i := 0
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("server recv data:%s, and write back", string(buf[:n]))
-
+		log.Printf("i:%d, server recv data:%s, and write back", i, string(buf[:n]))
+		i++
 		wn, err := conn.Write(buf[:n])
 		if err != nil {
 			panic(err)
