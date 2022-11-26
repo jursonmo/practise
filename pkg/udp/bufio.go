@@ -40,8 +40,8 @@ func NewUDPBufioWriter(c *UDPConn, batchs int) *UDPBufioWriter {
 	if batchs == 0 {
 		batchs = c.writeBatchs
 	}
-	if batchs == 0 {
-		panic("batchs == 0")
+	if batchs <= 0 {
+		panic("batchs <= 0")
 	}
 	ub := &UDPBufioWriter{c: c, batchs: batchs}
 	ub.wms = make([]ipv4.Message, 0, batchs)
@@ -141,8 +141,8 @@ func NewUDPBufioReader(c *UDPConn, batchs int, maxPktSize int) *UDPBufioReader {
 	if maxPktSize == 0 {
 		maxPktSize = c.maxBufSize
 	}
-	if batchs == 0 || maxPktSize == 0 {
-		panic("batchs == 0 || maxPktSize == 0")
+	if batchs <= 0 || maxPktSize <= 0 {
+		panic("batchs <= 0 || maxPktSize <= 0")
 	}
 
 	ub := &UDPBufioReader{c: c, batchs: batchs, maxPktSize: maxPktSize}

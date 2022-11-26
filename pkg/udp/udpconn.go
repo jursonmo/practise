@@ -118,7 +118,7 @@ func (c *UDPConn) Close() error {
 	}
 	if c.client && c.lconn != nil {
 		c.lconn.Close()
-		log.Printf("client:%v, %s<->%s, raddr:%s close over\n", c.client, c.LocalAddr().String(), c.RemoteAddr().String())
+		log.Printf("client:%v, %s<->%s, close over\n", c.client, c.LocalAddr().String(), c.RemoteAddr().String())
 	}
 	return nil
 }
@@ -146,11 +146,14 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 }
 
 func (c *UDPConn) Write(b []byte) (n int, err error) {
-	if c.ln != nil && c.ln.WriteBatchAble() {
-		return c.WriteWithBatch(b)
-	}
+	//client conn
 	if c.client {
 		return c.lconn.Write(b)
+	}
+
+	//the conn that accepted by listener
+	if c.ln.WriteBatchAble() {
+		return c.WriteWithBatch(b)
 	}
 	return c.lconn.WriteTo(b, c.raddr)
 }

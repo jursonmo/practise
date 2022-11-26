@@ -30,6 +30,7 @@ func WithListenerNum(n int) LnCfgOptions {
 	}
 }
 
+//如果不用batchs 读写, 设置成 0
 func Batchs(n int) LnCfgOptions {
 	return func(lc *ListenConfig) {
 		lc.batchs = n
@@ -68,7 +69,7 @@ func (l *UdpListen) String() string {
 }
 
 func NewUdpListen(ctx context.Context, network, addr string, opts ...LnCfgOptions) (*UdpListen, error) {
-	cfg := ListenConfig{network: network, addr: addr}
+	cfg := ListenConfig{network: network, addr: addr, batchs: defaultBatchs}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -119,9 +120,6 @@ func (cfg *ListenConfig) Tidy() error {
 		cfg.listenerNum = runtime.GOMAXPROCS(0)
 	}
 
-	if cfg.batchs == 0 {
-		cfg.batchs = defaultBatchs
-	}
 	if cfg.maxPacketSize == 0 {
 		cfg.maxPacketSize = defaultMaxPacketSize
 	}
@@ -230,7 +228,7 @@ func WithLnMaxPacketSize(n int) ListenerOpt {
 }
 
 func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt) (*Listener, error) {
-	l := &Listener{}
+	l := &Listener{batchs: defaultBatchs, maxPacketSize: defaultMaxPacketSize}
 	for _, opt := range opts {
 		opt(l)
 	}
@@ -253,16 +251,21 @@ func NewListener(ctx context.Context, network, addr string, opts ...ListenerOpt)
 	}
 	l.lconn = conn.(*net.UDPConn)
 	l.pc = ipv4.NewPacketConn(conn)
-	{
+
+	if l.batchs > 0 {
 		l.txqueue = make(chan MyBuffer, 512)
 		go l.writeBatchLoop()
+		//go l.readBatchLoop()
+		go l.readBatchLoopv2() //use buffer pool
+	} else {
+		//read one packet by one syscall
+		go l.readLoop()
 	}
-	//go l.readLoop()
-	go l.readLoopv2()
+
 	return l, nil
 }
 
-func (l *Listener) readLoop() {
+func (l *Listener) readBatchLoop() {
 	readBatchs := l.batchs
 	maxPacketSize := l.maxPacketSize
 	rms := make([]ipv4.Message, readBatchs)
@@ -284,6 +287,18 @@ func (l *Listener) readLoop() {
 		for i := 0; i < n; i++ {
 			l.handlePacket(rms[i].Addr, rms[i].Buffers[0][:rms[i].N])
 		}
+	}
+}
+
+func (l *Listener) readLoop() error {
+	buf := make([]byte, l.maxPacketSize)
+	for {
+		rn, ra, err := l.lconn.ReadFromUDP(buf)
+		if err != nil {
+			l.Close()
+			return err
+		}
+		l.handlePacket(ra, buf[:rn])
 	}
 }
 

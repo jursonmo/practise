@@ -7,9 +7,9 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-//readLoop ->handlePacket:分配新的内存对象,并且copy 一次
-//为了复用对象,同时减少一次内存copy, 实现 Listener readLoopv2 -> handleBuffer
-func (l *Listener) readLoopv2() {
+//readBatchLoop ->handlePacket:分配新的内存对象,并且copy 一次
+//为了复用对象,同时减少一次内存copy, 实现 Listener readBatchLoopv2 -> handleBuffer
+func (l *Listener) readBatchLoopv2() {
 	var err error
 	InitPool(l.maxPacketSize)
 	rms := make([]ipv4.Message, l.batchs)
