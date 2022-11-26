@@ -114,4 +114,5 @@ func (b *Buffer) GetAddr() net.Addr {
 func (b *Buffer) Reset() {
 	b.woffset = 0
 	b.roffset = 0
+	b.addr = nil
 }
