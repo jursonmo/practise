@@ -154,7 +154,7 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 }
 
 func (c *UDPConn) Read(buf []byte) (n int, err error) {
-	//客户端模式，又不启用batch, 就一个个读
+	//客户端读模式，又不启用batch, 就一个个读
 	if c.client && c.readBatchs == 0 {
 		return c.lconn.Read(buf)
 	}
