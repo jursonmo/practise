@@ -154,6 +154,11 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 }
 
 func (c *UDPConn) Read(buf []byte) (n int, err error) {
+	//客户端模式，又不启用batch, 就一个个读
+	if c.client && c.readBatchs == 0 {
+		return c.lconn.Read(buf)
+	}
+	//服务端模式, 不管是否批量读，都是由listen socket去完成读，UDPConn只需从队列里读
 	select {
 	case b := <-c.rxqueueB:
 		n = copy(buf, b)
