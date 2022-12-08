@@ -30,7 +30,7 @@ type MyBuffer interface {
 	io.ReadWriter
 	Bytes() []byte
 	Buffer() []byte
-	AddLen(int)
+	Advance(int) //instead of AddLen(int)
 	SetAddr(net.Addr)
 	GetAddr() net.Addr
 }
@@ -96,7 +96,8 @@ func (b *Buffer) Buffer() []byte {
 	return b.buf[b.woffset:]
 }
 
-func (b *Buffer) AddLen(n int) {
+//Advance
+func (b *Buffer) Advance(n int) {
 	if b.woffset+n > len(b.buf) {
 		log.Panicf("b.woffset:%d + n:%d > len(b.buf):%d ", b.woffset, n, len(b.buf))
 	}

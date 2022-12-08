@@ -33,7 +33,7 @@ func (l *Listener) readBatchLoopv2() {
 			continue
 		}
 		for i := 0; i < n; i++ {
-			buffers[i].AddLen(rms[i].N)
+			buffers[i].Advance(rms[i].N)
 			l.handleBuffer(rms[i].Addr, buffers[i])
 		}
 	}
