@@ -158,11 +158,11 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 	if c.client && c.readBatchs == 0 {
 		return c.lconn.Read(buf)
 	}
-	//服务端模式, 不管是否批量读，都是由listen socket去完成读，UDPConn只需从队列里读
+	//1.客户端读模式, 启用了batch读(说明后台有任务负责批量读), 这里只需从队列里读
+	//2.服务端模式, 不管是否批量读，都是由listen socket去完成读，UDPConn只需从队列里读
 	select {
 	case b := <-c.rxqueueB:
 		n = copy(buf, b)
-		//todo
 		return
 	case b := <-c.rxqueue:
 		n, err = b.Read(buf)
@@ -195,7 +195,7 @@ func (c *UDPConn) writeBatchLoop() {
 	bw.WriteBatchLoop(c.txqueue)
 }
 
-//todo: 返回的error 应该实现net.Error temporary(), 这样上层Write可以认为Eagain,再次调用Write
+//返回的error 应该实现net.Error temporary(), 这样上层Write可以认为Eagain,再次调用Write
 func (c *UDPConn) PutTxQueue(b MyBuffer) error {
 	select {
 	case c.txqueue <- b:

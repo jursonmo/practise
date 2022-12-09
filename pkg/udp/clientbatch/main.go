@@ -47,6 +47,9 @@ func handle(conn net.Conn) {
 		i++
 		wn, err := conn.Write(buf[:n])
 		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Temporary() {
+				continue
+			}
 			panic(err)
 		}
 		if n != wn {
@@ -63,6 +66,9 @@ func client(network, raddr string, data []byte) {
 	for i := 0; i < 10; i++ {
 		n, err := uconn.Write(data)
 		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Temporary() {
+				continue
+			}
 			panic(err)
 		}
 		log.Printf("%d, conn local:%s->%s, write data len:%d", i, uconn.LocalAddr().String(),

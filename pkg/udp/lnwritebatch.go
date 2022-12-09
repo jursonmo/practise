@@ -8,7 +8,8 @@ import (
 )
 
 var ErrTooBig = errors.New("bigger than Buffer MaxSize")
-var ErrTxQueueFull = errors.New("Err txqueueu is full")
+
+//var ErrTxQueueFull = errors.New("Err txqueueu is full")
 
 //use listener write batch, 把data 转换成MyBuffer, 然后放到tx队列里
 func (c *UDPConn) WriteWithBatch(data []byte) (n int, err error) {
@@ -35,6 +36,7 @@ func (c *UDPConn) WriteWithBatch(data []byte) (n int, err error) {
 	return
 }
 
+//返回的error 应该实现net.Error temporary(), 这样上层Write可以认为Eagain,再次调用Write
 func (l *Listener) PutTxQueue(b MyBuffer) error {
 	select {
 	case l.txqueue <- b:
