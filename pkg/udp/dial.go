@@ -66,9 +66,52 @@ func (c *UDPConn) ReadBatchLoop(handler func(msg []byte)) error {
 	}
 }
 
+//todo: 以后也改成pool 来复用对象
 func (c *UDPConn) handlePacket(msg []byte) {
 	//分配新的内存对象,并且copy 一次
 	b := make([]byte, len(msg))
 	copy(b, msg)
 	c.PutRxQueue(b)
+}
+
+//相比ReadBatchLoop->handlePacket, 复用了对象，少一次copy
+func (c *UDPConn) readBatchLoopv2() {
+	var err error
+	InitPool(c.maxBufSize)
+	rms := make([]ipv4.Message, c.readBatchs)
+	buffers := make([]MyBuffer, c.readBatchs)
+	n := len(rms)
+	log.Printf("client:%v->%v,read batchs:%d, maxPacketSize:%d, readLoopv2(use MyBuffer)....",
+		c.LocalAddr(), c.RemoteAddr(), c.readBatchs, c.maxBufSize)
+	for {
+		for i := 0; i < n; i++ {
+			b := GetMyBuffer(0)
+			buffers[i] = b
+			rms[i] = ipv4.Message{Buffers: [][]byte{b.Buffer()}}
+		}
+		n, err = c.pc.ReadBatch(rms, 0)
+		if err != nil {
+			c.Close()
+			panic(err)
+		}
+		log.Printf("readBatchLoopv2 client:%v->%v, batch got n:%d, len(ms):%d\n", c.LocalAddr(), c.RemoteAddr(), n, len(rms))
+
+		if n == 0 {
+			continue
+		}
+		for i := 0; i < n; i++ {
+			buffers[i].Advance(rms[i].N)
+			c.PutRxQueue2(buffers[i])
+		}
+	}
+}
+
+func (c *UDPConn) PutRxQueue2(b MyBuffer) {
+	//非阻塞模式,避免某个UDPConn 的数据没有被处理而阻塞了listener 或者 UDPConn 继续接受数据
+	select {
+	case c.rxqueue <- b:
+	default:
+		c.rxDrop += int64(len(b.Bytes()))
+		Release(b)
+	}
 }

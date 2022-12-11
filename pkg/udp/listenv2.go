@@ -43,13 +43,3 @@ func (l *Listener) handleBuffer(addr net.Addr, b MyBuffer) {
 	uc := l.getUDPConn(addr)
 	uc.PutRxQueue2(b)
 }
-
-func (c *UDPConn) PutRxQueue2(b MyBuffer) {
-	//非阻塞模式,避免某个UDPConn 的数据没有被处理而阻塞了listener 继续接受数据
-	select {
-	case c.rxqueue <- b:
-	default:
-		c.rxDrop += int64(len(b.Bytes()))
-		Release(b)
-	}
-}

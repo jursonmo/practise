@@ -61,9 +61,13 @@ func (p *pool) Put(b MyBuffer) {
 	p.Pool.Put(b)
 }
 
+var initPoolOnce sync.Once
+
 func InitPool(maxBufferSize int) {
-	p := &pool{maxBufferSize: maxBufferSize, Pool: sync.Pool{New: func() interface{} { return &Buffer{buf: make([]byte, maxBufferSize)} }}}
-	SetDefaultBufferPool(p)
+	initPoolOnce.Do(func() {
+		p := &pool{maxBufferSize: maxBufferSize, Pool: sync.Pool{New: func() interface{} { return &Buffer{buf: make([]byte, maxBufferSize)} }}}
+		SetDefaultBufferPool(p)
+	})
 }
 
 var ErrNoSpaceEnough = errors.New("no space Enough")

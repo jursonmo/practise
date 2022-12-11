@@ -101,7 +101,8 @@ func NewUDPConn(ln *Listener, lconn *net.UDPConn, raddr *net.UDPAddr, opts ...UD
 		//client dial
 		uc.client = true
 		if uc.readBatchs > 0 {
-			go uc.ReadBatchLoop(uc.rxhandler)
+			//go uc.ReadBatchLoop(uc.rxhandler)
+			go uc.readBatchLoopv2()
 		}
 		if uc.writeBatchs > 0 {
 			//后台起一个goroutine 负责批量写，上层直接write 就行。

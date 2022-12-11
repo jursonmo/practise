@@ -7,3 +7,4 @@
 7. 2022-11-24为止，服务器accpet 生成UDPConn 简单调用Read()\Write()，底层都是listener socket 批量读写的。 client dial 生成的UDPConn, 读默认是批量读的(可以通过udp.WithRxHandler(nil)来取消默认批量读)，写还是要用自定义的bufioWriter
 8. 2022-11-26,实现：client dial 生成的UDPConn 默认也是批量写，即后台默认起一个goroutine 负责批量写，业务层只需调用Write(). 如果udp.WithWriteBatchs(0)，就表示不想后台起一个goroutine 负责批量写，由业务层自己调用bufioWrite 里控制批量写。
 9. client dial 生成的UDPConn，通过udp.WithReadBatchs(0)来控制是否在后台起一个goroutine 来批量读，而不是udp.WithRxHandler(nil)来控制
+10. client 用readBatchLoopv2 来代替 readBatchLoop，这样可以复用内存对象，减少一次内存copy, 跟 listener readBatchLoopv2 一样
