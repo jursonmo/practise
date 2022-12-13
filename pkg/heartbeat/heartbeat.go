@@ -37,7 +37,7 @@ type Heartbeat struct {
 	startSeq uint32
 	onFlyReq HbPkg
 	failCnt  int
-	isFail   bool
+	err      error
 
 	requestHandler func(req HbPkg) error
 	onSuccess      func(ttl time.Duration)
@@ -117,13 +117,23 @@ func (t *timerx) Done() <-chan time.Time {
 //2. hb.RecvResp() -->channel
 //3. hb.Run --> recvResp, call OnSuccess if recvRespon succesfully, call OnFail
 func (hb *Heartbeat) Run() error {
+	if hb.err != nil {
+		return hb.err
+	}
+
 	timer := NewTimerx(hb.Intvl)
 	defer timer.Stop()
 
 	for {
+		//always check ctx first
 		select {
 		case <-hb.ctx.Done():
-			return hb.ctx.Err()
+			hb.err = hb.ctx.Err()
+			return hb.err
+		default:
+		}
+
+		select {
 		case p := <-hb.respChan:
 			if p.Seq != hb.onFlyReq.Seq {
 				continue
@@ -137,8 +147,8 @@ func (hb *Heartbeat) Run() error {
 			timer.Reset(hb.Intvl)
 
 		case <-timer.Done():
-			if isFail := hb.timeout(); isFail {
-				return fmt.Errorf("heartbeat fail")
+			if err := hb.timeout(); err != nil {
+				return err
 			}
 			hb.onFlyReq.Seq++
 			hb.onFlyReq.Ts = timex.Now()
@@ -152,24 +162,24 @@ func (hb *Heartbeat) Run() error {
 }
 
 func (hb *Heartbeat) IsFail() bool {
-	return hb.isFail
+	return hb.err != nil
 }
 
 //handle timeout case
-func (hb *Heartbeat) timeout() bool {
-	if hb.isFail {
-		return true
+func (hb *Heartbeat) timeout() error {
+	if hb.err != nil {
+		return hb.err
 	}
 
 	hb.failCnt++
 	if hb.failCnt <= hb.Probes {
-		return false
+		return nil
 	}
 
 	//fail
-	hb.isFail = true
+	hb.err = fmt.Errorf("heartbeat stop, timeout cnt:%d", hb.failCnt)
 	if hb.onFail != nil {
 		hb.onFail()
 	}
-	return hb.isFail
+	return hb.err
 }
