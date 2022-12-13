@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/jursonmo/practise/pkg/timex"
@@ -29,15 +30,19 @@ type HbPkg struct {
 }
 
 type Heartbeat struct {
-	ctx            context.Context
-	ttl            time.Duration
-	respChan       chan HbPkg
-	onFlyReq       HbPkg
-	failCnt        int
+	ctx context.Context
+
+	ttl      time.Duration
+	respChan chan HbPkg
+	startSeq uint32
+	onFlyReq HbPkg
+	failCnt  int
+	isFail   bool
+
+	requestHandler func(req HbPkg) error
 	onSuccess      func(ttl time.Duration)
 	onFail         func()
-	isFail         bool
-	requestHandler func(req HbPkg) error
+
 	Config
 }
 type HbOption func(*Heartbeat)
@@ -54,14 +59,23 @@ func WithSuccessHandler(f func(time.Duration)) HbOption {
 	}
 }
 
+func WithStartSeq(start uint32) HbOption {
+	return func(h *Heartbeat) {
+		h.startSeq = start
+	}
+}
+
 func NewHeartbeart(c Config, sendRequest func(req HbPkg) error, opts ...HbOption) *Heartbeat {
 	if sendRequest == nil {
 		return nil
 	}
 	hb := &Heartbeat{Config: c, requestHandler: sendRequest, respChan: make(chan HbPkg, 2)}
+	hb.startSeq = rand.Uint32()
 	for _, opt := range opts {
 		opt(hb)
 	}
+	//init request seq
+	hb.onFlyReq.Seq = hb.startSeq
 	return hb
 }
 
