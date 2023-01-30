@@ -85,9 +85,9 @@ func (c *UDPConn) readBatchLoopv2() {
 		c.LocalAddr(), c.RemoteAddr(), c.readBatchs, c.maxBufSize)
 	for {
 		for i := 0; i < n; i++ {
-			b := GetMyBuffer(0)
+			b := GetMyBuffer(0) //复用对象
 			buffers[i] = b
-			rms[i] = ipv4.Message{Buffers: [][]byte{b.Buffer()}}
+			rms[i] = ipv4.Message{Buffers: [][]byte{b.Buffer()}} //引用内存对象，系统调用后，直接把数据写入到内存里
 		}
 		n, err = c.pc.ReadBatch(rms, 0)
 		if err != nil {
