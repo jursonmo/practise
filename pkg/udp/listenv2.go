@@ -40,6 +40,7 @@ func (l *Listener) readBatchLoopv2() {
 }
 
 func (l *Listener) handleBuffer(addr net.Addr, b MyBuffer) {
-	uc := l.getUDPConn(addr)
-	uc.PutRxQueue2(b)
+	if uc := l.getUDPConn(addr); uc != nil {
+		uc.PutRxQueue2(b)
+	}
 }
