@@ -37,6 +37,7 @@ func New(ctx context.Context) *SingleTask {
 	return &SingleTask{ctx: ctx, cancel: cancel, resultCh: make(chan interface{}, 1)}
 }
 
+//close singetask, and the singleTask can't be put new task
 func (st *SingleTask) Close() {
 	st.Lock()
 	defer st.Unlock()
@@ -45,7 +46,7 @@ func (st *SingleTask) Close() {
 	}
 }
 
-//close singetask and wait task quit
+//close singetask and wait task quit, and the singleTask can't be put new task
 func (st *SingleTask) CloseAndWait() {
 	st.Lock()
 	defer st.Unlock()
@@ -55,10 +56,17 @@ func (st *SingleTask) CloseAndWait() {
 	}
 }
 
+//just cancel current running task and wait task end, the singelTask can still put a new task
+func (st *SingleTask) CancelTask() {
+	st.Lock()
+	defer st.Unlock()
+	st.cancelTask()
+}
+
 func (st *SingleTask) cancelTask() {
 	if st.taskCancel != nil {
 		st.taskCancel()
-		//wait to get cancel result
+		//wait to task end and get the canceled task result
 		getTaskResult(st.taskCtx)
 		// result := getTaskResult(st.taskCtx)
 		// for _, resultHandler := range st.resultHandlers {

@@ -78,7 +78,44 @@ func TestCloseAndWait(t *testing.T) {
 	}
 	st.CloseAndWait()
 	if !taskOver {
-		t.Fatalf("CloseAndWait don't wait mytask finish")
+		t.Fatalf("unexpect: CloseAndWait api don't wait task finish")
+	}
+}
+
+func TestCancelTask(t *testing.T) {
+	var err error
+	ctx, _ := context.WithCancel(context.Background())
+	st := New(ctx)
+
+	taskCancelTimes := 0
+	myTask := func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			//cancel task, count times
+			taskCancelTimes++
+			return ctx.Err()
+		case <-time.After(time.Second):
+			//simulate work spend one Second
+			return nil //return nil means task finish ok
+		}
+	}
+	err = st.PutTask(myTask)
+	if err != nil {
+		t.Fatalf("put task err, unexpect")
+	}
+	st.CancelTask()
+	if taskCancelTimes != 1 {
+		t.Fatalf("unexpect: CancelTask api don't wait task finish")
+	}
+
+	//singleTask can be put a other new task
+	err = st.PutTask(myTask)
+	if err != nil {
+		t.Fatalf("put task err, unexpect")
+	}
+	st.CancelTask() //cancel task again
+	if taskCancelTimes != 2 {
+		t.Fatalf("unexpect: CancelTask() api can't cancel task again")
 	}
 }
 
