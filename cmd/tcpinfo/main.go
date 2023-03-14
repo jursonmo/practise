@@ -9,10 +9,10 @@ import (
 	"net"
 	"sync"
 
-	//"github.com/brucespang/go-tcpinfo"
 	"github.com/jursonmo/go-tcpinfo"
 )
 
+//"github.com/brucespang/go-tcpinfo"
 func handleConn(conn net.Conn) {
 	io.Copy(ioutil.Discard, conn)
 }

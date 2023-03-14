@@ -9,8 +9,10 @@ import (
 	"net"
 	"sync"
 
-	"github.com/jursonmo/go-tcpinfo"
+	mytcpinfo "github.com/jursonmo/go-tcpinfo"
 )
+
+//replace github.com/brucespang/go-tcpinfo v0.2.0 => github.com/jursonmo/go-tcpinfo v0.2.1-0.20211130062728-5c8ac4f72951
 
 func handleConn(conn net.Conn) {
 	io.Copy(ioutil.Discard, conn)
@@ -48,8 +50,8 @@ func client() {
 		panic(err)
 	}
 
-	//tcpInfo, err := tcpinfo.GetsockoptTCPInfo(conn.(*net.TCPConn))
-	tcpInfo, err := tcpinfo.GetTCPInfo(conn)
+	//tcpInfo, err := mytcpinfo.GetsockoptTCPInfo(conn.(*net.TCPConn))
+	tcpInfo, err := mytcpinfo.GetTCPInfo(conn)
 	if err != nil {
 		panic(err)
 	}
@@ -114,7 +116,7 @@ func tlsClient() {
 		return
 	}
 
-	tcpInfo, err := tcpinfo.GetTCPInfo(conn)
+	tcpInfo, err := mytcpinfo.GetTCPInfo(conn)
 	if err != nil {
 		panic(err)
 	}
