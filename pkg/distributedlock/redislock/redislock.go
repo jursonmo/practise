@@ -15,6 +15,8 @@ import (
 	"github.com/rfyiamcool/backoff"
 )
 
+//官网https://github.com/redis/go-redis 有推荐一个distributed lock: https://github.com/bsm/redislock
+//myself: 会考虑到 网络延迟， lock.Run(ctx, task), 在 lock 的保护下执行业务回调task, 业务回调执行期间会自动续约lock
 type Logger interface {
 	Debugf(format string, a ...interface{})
 	Infof(format string, a ...interface{})
