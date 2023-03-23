@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -23,7 +25,7 @@ var done chan interface{}
 var interrupt chan os.Signal
 
 //conn.ReadMessage() 只能读到应用数据，读不到控制信息的，比如ping/pong、close 等控制信息是读不到的。
-func receiveHandler(connection *websocket.Conn) {
+func receiveHandler(connection *websocket.Conn, done chan struct{}) {
 	defer close(done)
 	for {
 		//connection.SetReadDeadline(time.Now().Add(5 * time.Second)) //每次read msg 后，即设置一次
@@ -38,7 +40,7 @@ func receiveHandler(connection *websocket.Conn) {
 			// Error in receive: read tcp 127.0.0.1:46852->127.0.0.1:8080: i/o timeout
 			return
 		}
-		log.Printf("msg type:%v, Received: %s\n", t, msg)
+		log.Printf("msg type:%v, Received: %s from:%v\n", t, msg, connection.RemoteAddr())
 	}
 }
 
@@ -50,7 +52,7 @@ func receiveHandler(connection *websocket.Conn) {
 //	 如果一直收不到pong, receiveHandler 就会返回超时错误。
 func main() {
 	flag.Parse()
-	done = make(chan interface{})    // Channel to indicate that the receiverHandler is done
+	// Channel to indicate that the receiverHandler is done
 	interrupt = make(chan os.Signal) // Channel to listen for interrupt signal to terminate gracefully
 
 	signal.Notify(interrupt, os.Interrupt) // Notify the interrupt channel for SIGINT
@@ -60,13 +62,31 @@ func main() {
 	} else {
 		socketUrl = "ws://localhost:8080" + "/socket"
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := sync.WaitGroup{}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wsDial(ctx, socketUrl)
+		}()
+		time.Sleep(time.Second * 2)
+	}
+	<-interrupt
+	cancel()
+	wg.Wait()
+	log.Println("main over")
+}
+
+func wsDial(ctx context.Context, socketUrl string) {
+	done := make(chan struct{})
 	conn, _, err := websocket.DefaultDialer.Dial(socketUrl, nil)
 	if err != nil {
 		log.Fatal("Error connecting to Websocket Server:", err)
 	}
 	defer conn.Close()
 
-	go receiveHandler(conn)
+	go receiveHandler(conn, done)
 
 	// Our main loop for the client
 	// We send our relevant packets here
@@ -102,7 +122,7 @@ func main() {
 				return
 			}
 			fmt.Println("send Hello from GolangDocs!")
-		case <-interrupt:
+		case <-ctx.Done():
 			// We received a SIGINT (Ctrl + C). Terminate gracefully...
 			log.Println("Received SIGINT interrupt signal. Closing all pending connections")
 
@@ -200,7 +220,6 @@ func SetReadDeadline(conn *websocket.Conn, isServer bool, readDeadline time.Dura
 		handler = conn.PongHandler()
 		conn.SetPongHandler(wrapHanlder(handler, readDeadline))
 	}
-
 }
 
 //just for client conn to SetReadDeadline
