@@ -20,12 +20,19 @@ func WithMaxBatchSize(size int) Option {
 	}
 }
 
+type BufferQueuer interface {
+	Close()
+	GetWithSize(int) ([]interface{}, error) //block, but Close can make GetWithSize return
+	Put(batch ...interface{}) (int, error)
+	PutRoll(batch ...interface{}) (int, error) //unblock, replace oldest entry
+}
+
 type Task struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	once     sync.Once
 	name     string
-	buffer   *batchqueue.BatchQueue
+	buffer   *batchqueue.BatchQueue // 应该抽象成 BufferQueuer
 	capacity int
 	roll     bool //buffer roll
 
