@@ -6,4 +6,4 @@
 ### todo
 1. 减少内存copy 次数(fixed)
 2. 增加控制报文和数据报文类型，
-3. 心跳检测
+3. 心跳检测(心跳作为控制报文，每次收到心跳可以重置conn.SetReadDeadline(), 提供一个类似于websocket 的SetPingHeadler,SetPongHandler 的接口，这样上层可以wrapHandler 重置ReadDeadline，这样就不需要每个数据都去重置ReadDeadline，因为频繁重置ReadDeadline也是有性能损耗的)
