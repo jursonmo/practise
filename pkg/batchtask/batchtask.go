@@ -32,8 +32,8 @@ type Task struct {
 	executor     Executor
 	maxBatchSize int //max size of do()
 
-	close bool
-	mu    sync.Mutex
+	closed bool
+	mu     sync.Mutex
 }
 
 type Executor interface {
@@ -97,10 +97,11 @@ func (t *Task) Start(ctx context.Context) error {
 
 func (t *Task) Stop() {
 	t.mu.Lock()
-	if t.close {
+	if t.closed {
 		t.mu.Unlock()
 		return
 	}
+	t.closed = true
 	t.mu.Unlock()
 
 	if t.cancel != nil {
