@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/jursonmo/practise/pkg/backoffx"
 	"github.com/jursonmo/practise/pkg/dial"
 )
 
@@ -26,6 +27,7 @@ func main() {
 	//client start
 	time.Sleep(time.Second)
 	conn, err := dial.Dial(ctx, "tcp://127.0.0.1:8080",
+		dial.WithBackOffer(backoffx.NewDynamicBackoff(time.Second*2, time.Second*30, 2.0)),
 		dial.WithKeepAlive(time.Second*5), dial.WithTcpUserTimeout(time.Second*5))
 	// conn, err := dial.Dial(ctx, "tcp://127.0.0.1:8080",
 	// 	dial.WithTcpUserTimeout(time.Second*5))
