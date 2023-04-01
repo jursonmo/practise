@@ -19,10 +19,11 @@ type ServerConfig struct {
 	ListenAddrs []string
 }
 
+type ConnHandler func(conn net.Conn, fromServer int) error
 type Server struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
-	handler     func(net.Conn) error
+	handler     ConnHandler
 	keepalive   time.Duration
 	userTimeout time.Duration
 	lns         []net.Listener
@@ -47,7 +48,7 @@ func ServerUserTimeout(t time.Duration) ServerOption {
 	}
 }
 
-func WithHandler(handler func(net.Conn) error) ServerOption {
+func WithHandler(handler ConnHandler) ServerOption {
 	return func(s *Server) {
 		s.handler = handler
 	}
@@ -150,7 +151,7 @@ func (s *Server) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			go s.handler(conn)
+			go s.handler(conn, index)
 		}
 	}
 
