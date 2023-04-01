@@ -19,7 +19,7 @@ type ServerConfig struct {
 	ListenAddrs []string
 }
 
-type ConnHandler func(conn net.Conn, fromServer int) error
+type ConnHandler func(conn net.Conn, fromLnID int) error
 type Server struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -134,10 +134,10 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}
 
-	accpet := func(index int, ln net.Listener, endpoint *url.URL) error {
-		log.Printf("server(%d) start and listen at %s://%s\n", index, endpoint.Scheme, endpoint.Host)
-		log.Printf("index:%d, ln.Addr():%s://%s\n", index, ln.Addr().Network(), ln.Addr().String())
-		defer log.Printf("index:%d, ln.Addr():%s://%s out service\n", index, ln.Addr().Network(), ln.Addr().String())
+	accpet := func(lnID int, ln net.Listener, endpoint *url.URL) error {
+		log.Printf("server(%d) start and listen at %s://%s\n", lnID, endpoint.Scheme, endpoint.Host)
+		log.Printf("lnID:%d, ln.Addr():%s://%s\n", lnID, ln.Addr().Network(), ln.Addr().String())
+		defer log.Printf("lnID:%d, ln.Addr():%s://%s out service\n", lnID, ln.Addr().Network(), ln.Addr().String())
 		for {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -151,7 +151,7 @@ func (s *Server) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			go s.handler(conn, index)
+			go s.handler(conn, lnID)
 		}
 	}
 

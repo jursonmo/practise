@@ -76,7 +76,7 @@ loop:
 	time.Sleep(time.Second)
 }
 
-func serverHandle(conn net.Conn, fromSrv int) error {
+func serverHandle(conn net.Conn, fromLnID int) error {
 	buf := make([]byte, 20)
 	for {
 		n, err := conn.Read(buf)
@@ -84,6 +84,6 @@ func serverHandle(conn net.Conn, fromSrv int) error {
 			fmt.Println(err)
 			return err
 		}
-		fmt.Printf("server:%d recv data:%s", fromSrv, string(buf[:n]))
+		fmt.Printf("server ln id:%d recv data:%s", fromLnID, string(buf[:n]))
 	}
 }
