@@ -21,15 +21,16 @@ type ServerConfig struct {
 
 type Server struct {
 	ctx         context.Context
+	cancel      context.CancelFunc
 	handler     func(net.Conn) error
 	keepalive   time.Duration
 	userTimeout time.Duration
-	lis         net.Listener
+	lns         []net.Listener
 	tlsConf     *tls.Config
 	certFile    string
 	keyFile     string
 	clientCert  string
-	endpoint    *url.URL
+	endpoints   []*url.URL
 }
 
 type ServerOption func(s *Server)
@@ -52,16 +53,18 @@ func WithHandler(handler func(net.Conn) error) ServerOption {
 	}
 }
 
-func NewServer(addr string, options ...ServerOption) (*Server, error) {
+func NewServer(addrs []string, options ...ServerOption) (*Server, error) {
 	s := &Server{}
 	for _, opt := range options {
 		opt(s)
 	}
-	endpoint, err := url.Parse(addr)
-	if err != nil {
-		return nil, err
+	for _, addr := range addrs {
+		endpoint, err := url.Parse(addr)
+		if err != nil {
+			return nil, err
+		}
+		s.endpoints = append(s.endpoints, endpoint)
 	}
-	s.endpoint = endpoint
 
 	if s.tlsConf == nil {
 		if s.certFile != "" && s.keyFile != "" {
@@ -96,50 +99,72 @@ func NewServer(addr string, options ...ServerOption) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) Start(ctx context.Context) error {
-	nctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	s.ctx = nctx
-
-	endpoint := s.endpoint
-	l, err := NewListener("tcp4", endpoint.Host, s.keepalive, s.userTimeout)
-	if err != nil {
-		return err
+func (s *Server) Stop() error {
+	if s.cancel != nil {
+		s.cancel()
 	}
-	switch endpoint.Scheme {
-	case "tls":
-		//s.lis, err = tls.Listen("tcp4", endpoint.Host, s.tlsConf)
-		s.lis, err = tlsListen(l, s.tlsConf)
-		if err != nil {
-			return err
-		}
-	case "tcp":
-		//s.lis, err = net.Listen("tcp4", endpoint.Host)
-		s.lis = l
+	for _, ln := range s.lns {
+		ln.Close()
 	}
-
-	log.Printf("server start and listen at %s://%s\n", endpoint.Scheme, endpoint.Host)
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		conn, err := s.lis.Accept()
-		if err, ok := err.(net.Error); ok && err.Temporary() {
-			time.Sleep(time.Millisecond * 500)
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		go s.handler(conn)
-	}
+	return nil
 }
 
-func NewListener(network, laddr string, keepalive, userTimeout time.Duration) (net.Listener, error) {
+func (s *Server) Start(ctx context.Context) error {
+	nctx, cancel := context.WithCancel(context.Background())
+	s.ctx = nctx
+	s.cancel = cancel
+
+	s.lns = make([]net.Listener, len(s.endpoints))
+	for i, endpoint := range s.endpoints {
+		l, err := NewListener(s.ctx, "tcp4", endpoint.Host, s.keepalive, s.userTimeout)
+		if err != nil {
+			return err
+		}
+		switch endpoint.Scheme {
+		case "tls":
+			//s.lis, err = tls.Listen("tcp4", endpoint.Host, s.tlsConf)
+			s.lns[i], err = tlsListen(l, s.tlsConf)
+			if err != nil {
+				return err
+			}
+		case "tcp":
+			//s.lis, err = net.Listen("tcp4", endpoint.Host)
+			s.lns[i] = l
+		}
+	}
+
+	accpet := func(index int, ln net.Listener, endpoint *url.URL) error {
+		log.Printf("server(%d) start and listen at %s://%s\n", index, endpoint.Scheme, endpoint.Host)
+		log.Printf("index:%d, ln.Addr():%s://%s\n", index, ln.Addr().Network(), ln.Addr().String())
+		defer log.Printf("index:%d, ln.Addr():%s://%s out service\n", index, ln.Addr().Network(), ln.Addr().String())
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			//ln.Close make ln.Accept() return
+			conn, err := ln.Accept()
+			if err, ok := err.(net.Error); ok && err.Temporary() {
+				time.Sleep(time.Millisecond * 500)
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			go s.handler(conn)
+		}
+	}
+
+	for i, ln := range s.lns {
+		go accpet(i, ln, s.endpoints[i])
+	}
+	return nil
+}
+
+func NewListener(ctx context.Context, network, laddr string, keepalive, userTimeout time.Duration) (net.Listener, error) {
 	var lc net.ListenConfig
 	lc.KeepAlive = keepalive
 	lc.Control = TcpUserTimeoutControl(userTimeout)
-	l, err := lc.Listen(context.Background(), network, laddr)
+	l, err := lc.Listen(ctx, network, laddr)
 	if err != nil {
 		return nil, err
 	}
