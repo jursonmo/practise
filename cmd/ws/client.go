@@ -127,7 +127,7 @@ func wsDial(ctx context.Context, socketUrl string) {
 			log.Println("Received SIGINT interrupt signal. Closing all pending connections")
 
 			// Close our websocket connection
-			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, "")) //websocket.CloseNormalClosure
 			if err != nil {
 				log.Println("Error during closing websocket:", err)
 				return
@@ -137,7 +137,8 @@ func wsDial(ctx context.Context, socketUrl string) {
 			case <-done:
 				log.Println("Receiver Channel Closed! Exiting....")
 			case <-time.After(time.Duration(1) * time.Second):
-				//正常情况下，发送close 控制信息后，server 会关闭连接，receiveHandler 会读取错误，
+				//正常情况下，发送close 控制信息后，server 会关闭连接，本地收到fin 后, 当前的receiveHandler 会读取错误
+				//本端发送close 控制信息并不会自己主动关闭本地socket
 				//并且close(done), 上面的case <-done:会更早执行,这里就不会被调用到.
 				//如果底层网络是不同的，receiveHandler 感知不到错误，那么就会走到这里。
 				log.Println("Timeout in closing receiving channel. Exiting....")
