@@ -84,11 +84,13 @@ func (decoder *EventDecoder) Decode() (*Event, error) {
 		} else if line[0] == ':' {
 			// 忽略注释行
 			continue
-		} else if strings.HasPrefix(string(line), "id:") {
+		}
+		content := string(line)
+		if strings.HasPrefix(content, "id:") {
 			event.ID = strings.TrimSpace(string(line[3:]))
-		} else if strings.HasPrefix(string(line), "event:") {
+		} else if strings.HasPrefix(content, "event:") {
 			event.Event = strings.TrimSpace(string(line[6:]))
-		} else if strings.HasPrefix(string(line), "data:") {
+		} else if strings.HasPrefix(content, "data:") {
 			//每个事件由类型(event)和数据(data)两部分组成，同时每个事件可以有一个可选的标识符(id)。
 			//读到data: 就应该返回了
 			event.Data = strings.TrimSpace(string(line[5:]))
