@@ -23,8 +23,8 @@ import (
 )
 
 //todo:
-//1. 程序参数指定 key
-//2. 限制 每次会话的msg
+//1. 程序参数指定 key(fixed)
+//2. 限制 每次会话的msg, 打印 token 花费
 //3. 限制请求的次数，查看相关文档https://platform.openai.com/docs/guides/rate-limits/overview
 //4. ws
 //5. 通信格式。
@@ -41,6 +41,35 @@ import (
 如果您使用OpenAI API来生成自动完成结果，则默认的max_tokens参数取决于您所使用的API模型和计划。
 在使用API时，请务必查看相应文档以了解API的默认设置。
 */
+
+/*
+{
+   "id":"chatcmpl-abc123",
+   "object":"chat.completion",
+   "created":1677858242,
+   "model":"gpt-3.5-turbo-0301",
+   "usage":{
+      "prompt_tokens":13,
+      "completion_tokens":7,
+      "total_tokens":20
+   },
+   "choices":[
+      {
+         "message":{
+            "role":"assistant",
+            "content":"\n\nThis is a test!"
+         },
+         "finish_reason":"stop",
+         "index":0
+      }
+   ]
+}
+
+prompt_tokens 输入的 token 数量，
+completion_tokens 是 ChatGPT 回复的 token 数量，
+total_tokens 是总共使用的 token 数量
+*/
+
 var DefaultMaxTokens = 40
 
 var HeaderSize = 2
@@ -67,7 +96,7 @@ var (
 	remoteAddr = flag.String("r", "tcp://127.0.0.1:1420", "client/proxy mode, the addr connect to ")
 	localAddr  = flag.String("l", "tcp://0.0.0.0:1420", "server/proxy mode, the listen addr ")
 	stdin      = flag.Bool("i", false, "enable stdin ")
-	key        = flag.String("k", "false", "enable stdin ")
+	key        = flag.String("k", "", "openai key")
 )
 
 func QuitSignal() <-chan os.Signal {
@@ -346,6 +375,7 @@ func startStdClient(ctx context.Context, aiClient *openai.Client) {
 			Content: content,
 		})
 		fmt.Printf("answer from chatGPT:\n%s\n", content)
+		fmt.Printf("------------\n %v ---------\n", resp.Usage)
 	}
 }
 
