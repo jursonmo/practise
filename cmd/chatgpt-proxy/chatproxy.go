@@ -135,7 +135,10 @@ func main() {
 			fmt.Printf("server mode need local addr, use -l")
 			return
 		}
-		Proxy(ctx, *localAddr, *remoteAddr)
+		err := Proxy(ctx, *localAddr, *remoteAddr)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 	log.Printf("quit signal:%v", <-QuitSignal())
 	cancel()
@@ -146,6 +149,20 @@ func info(conn net.Conn) string {
 }
 
 func Proxy(ctx context.Context, laddr, raddr string) error {
+	urls, err := url.Parse(laddr)
+	if err != nil {
+		return err
+	}
+	if urls.Scheme == "tcp" {
+		return tcpProxy(ctx, laddr, raddr)
+	}
+	if urls.Scheme == "ws" {
+		return wsProxy(ctx, laddr, raddr)
+	}
+	return nil
+}
+
+func tcpProxy(ctx context.Context, laddr, raddr string) error {
 	serverHandle := func(conn net.Conn, _ int) error {
 		log.Printf("new conn, l:%v, r:%v\n", conn.LocalAddr(), conn.RemoteAddr())
 
@@ -185,6 +202,7 @@ func Proxy(ctx context.Context, laddr, raddr string) error {
 	return nil
 }
 
+//从stdin 读取数据，转发给对端, 每个问题以\n 作为结束符。 接受数据是header+payload
 func Client(ctx context.Context, connectAddr string) error {
 	log.Println("client mode")
 	reader := bufio.NewReader(os.Stdin)
@@ -270,8 +288,8 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 		}
 		content := resp.Choices[0].Message.Content
 		if len(messages) == DefaultRecordMsgs {
-			//delete first
-			messages = append(messages[:0], messages[1:]...)
+			//delete first？ 一问一答，应该删除两个
+			messages = append(messages[:1], messages[2:]...)
 		}
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleAssistant,
@@ -292,6 +310,7 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 	return nil
 }
 
+//接受数据以"\n" 结尾, 返回数据用hearder(len)+paylaod
 func Server(ctx context.Context, addr string, key string) {
 	log.Println("server mode")
 	aiClient := openai.NewClient(key)
