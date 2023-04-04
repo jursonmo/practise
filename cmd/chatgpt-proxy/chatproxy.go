@@ -24,7 +24,7 @@ import (
 
 //todo:
 //1. 程序参数指定 key(fixed)
-//2. 限制 每次会话的msg, 打印 token 花费
+//2. 限制 每次会话的msg(fixed), 打印 token 花费(fixed)
 //3. 限制请求的次数，查看相关文档https://platform.openai.com/docs/guides/rate-limits/overview
 //4. ws
 //5. 通信格式。
@@ -71,7 +71,7 @@ total_tokens 是总共使用的 token 数量
 */
 
 var DefaultMaxTokens = 40
-
+var DefaultRecordMsgs = 3 * 2 //保留三次对话的消息
 var HeaderSize = 2
 
 type chatObject struct {
@@ -95,8 +95,8 @@ var (
 	mode       = flag.String("m", CLIENT, "client: -r tcp://x.x.x.x:{port}, proxy: -l -r, server: -l ")
 	remoteAddr = flag.String("r", "tcp://127.0.0.1:1420", "client/proxy mode, the addr connect to ")
 	localAddr  = flag.String("l", "tcp://0.0.0.0:1420", "server/proxy mode, the listen addr ")
-	stdin      = flag.Bool("i", false, "enable stdin ")
 	key        = flag.String("k", "", "openai key")
+	stdin      = flag.Bool("i", false, "enable stdin ")
 )
 
 func QuitSignal() <-chan os.Signal {
@@ -240,7 +240,7 @@ func (cc *ChatClient) String() string {
 
 func (cc *ChatClient) Run(ctx context.Context) error {
 	defer cc.conn.Close()
-	messages := make([]openai.ChatCompletionMessage, 0)
+	messages := make([]openai.ChatCompletionMessage, 0, DefaultRecordMsgs)
 
 	reader := bufio.NewReader(cc.conn)
 	for {
@@ -269,6 +269,10 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 			return err
 		}
 		content := resp.Choices[0].Message.Content
+		if len(messages) == DefaultRecordMsgs {
+			//delete first
+			messages = append(messages[:0], messages[1:]...)
+		}
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleAssistant,
 			Content: content,
