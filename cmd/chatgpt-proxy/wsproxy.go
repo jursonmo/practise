@@ -88,7 +88,7 @@ func chatHome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	http.ServeFile(w, r, "home.html")
+	http.ServeFile(w, r, "chat.html")
 }
 
 var upgrader = websocket.Upgrader{} // use default options
