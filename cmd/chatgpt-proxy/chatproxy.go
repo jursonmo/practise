@@ -271,13 +271,17 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 
 	reader := bufio.NewReader(cc.conn)
 	for {
-		data, err := reader.ReadBytes('\n')
+		//data, err := reader.ReadBytes('\n')
+		text, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("%v, Error reading data:", cc, err.Error())
+			log.Printf("%v, Error reading data:%v\n", cc, err.Error())
 			return err
 		}
 
-		text := string(data)
+		//text := string(data)
+		text = strings.TrimSuffix(text, "\n")
+		log.Printf("--------------------\n")
+		log.Printf("client promot:%s\n", text)
 		messages = append(messages, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleUser,
 			Content: text,
@@ -295,7 +299,10 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 			fmt.Println("%v, Error creating completion:", cc, err.Error())
 			return err
 		}
+
 		content := resp.Choices[0].Message.Content
+		log.Printf("openai reply len:%d, tokens usage:%v\n", len(content), resp.Usage)
+
 		if len(messages) == DefaultRecordMsgs {
 			//delete first？ 一问一答，应该删除两个
 			messages = append(messages[:1], messages[2:]...)
@@ -306,7 +313,7 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 		})
 		// 将OpenAI响应转发回客户端
 		reply := make([]byte, HeaderSize+len(content))
-		binary.BigEndian.PutUint16(reply, uint16(len(content)))
+		binary.BigEndian.PutUint16(reply[:HeaderSize], uint16(len(content)))
 		copy(reply[HeaderSize:], []byte(content))
 		// buffer :=bytes.NewBuffer(reply)
 		// buffer.W
@@ -315,6 +322,8 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 			fmt.Println("%v,Error response data:", cc, err.Error())
 			return err
 		}
+		log.Printf("write back to client len:%d\n", len(reply))
+		log.Printf("--------------------\n")
 	}
 	return nil
 }
@@ -322,8 +331,8 @@ func (cc *ChatClient) Run(ctx context.Context) error {
 //接受数据以"\n" 结尾, 返回数据用hearder(len)+paylaod
 func Server(ctx context.Context, addr string, key string) {
 	log.Println("server mode")
-	aiClient := openai.NewClient(key)
-	ListModels(ctx, aiClient)
+	aiClient := openai.NewClient(key) //默认域名"https://api.openai.com/v1"
+	//ListModels(ctx, aiClient)
 
 	//chatCh := make(chan chatObject, 1)
 	serverHandle := func(conn net.Conn, _ int) error {
@@ -408,7 +417,7 @@ func startStdClient(ctx context.Context, aiClient *openai.Client) {
 			Content: content,
 		})
 		fmt.Printf("answer from chatGPT:\n%s\n", content)
-		fmt.Printf("------------\n %v\n ---------\n", resp.Usage)
+		fmt.Printf("------------\n tokens usage:%v\n ---------\n", resp.Usage)
 	}
 }
 
