@@ -24,6 +24,9 @@
                 if (!msg.value) {
                     return false;
                 }
+                var item = document.createElement("div");
+                item.innerText = "->me:" + msg.value;
+                appendLog(item);
                 conn.send(msg.value);
                 msg.value = "";
                 return false;
