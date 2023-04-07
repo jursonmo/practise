@@ -43,6 +43,13 @@ import (
 */
 
 /*
+Model endpoint compatibility
+ENDPOINT	MODEL NAME
+/v1/chat/completions	gpt-4, gpt-4-0314, gpt-4-32k, gpt-4-32k-0314, gpt-3.5-turbo, gpt-3.5-turbo-0301
+/v1/completions	text-davinci-003, text-davinci-002, text-curie-001, text-babbage-001, text-ada-001, davinci, curie, babbage, ada
+/v1/edits	text-davinci-edit-001, code-davinci-edit-001
+
+response:
 {
    "id":"chatcmpl-abc123",
    "object":"chat.completion",
@@ -70,7 +77,7 @@ completion_tokens 是 ChatGPT 回复的 token 数量，
 total_tokens 是总共使用的 token 数量
 */
 
-var DefaultMaxTokens = 40
+var DefaultMaxTokens = 50
 var DefaultRecordMsgs = 3 * 2 //保留三次对话的消息
 var HeaderSize = 2
 
@@ -153,6 +160,7 @@ func Proxy(ctx context.Context, laddr, raddr string) error {
 	if err != nil {
 		return err
 	}
+
 	if urls.Scheme == "tcp" {
 		return tcpProxy(ctx, laddr, raddr)
 	}
@@ -163,8 +171,9 @@ func Proxy(ctx context.Context, laddr, raddr string) error {
 }
 
 func tcpProxy(ctx context.Context, laddr, raddr string) error {
+	log.Println("tcp proxy start....")
 	serverHandle := func(conn net.Conn, _ int) error {
-		log.Printf("new conn, l:%v, r:%v\n", conn.LocalAddr(), conn.RemoteAddr())
+		log.Printf("new tcp conn, l:%v, r:%v\n", conn.LocalAddr(), conn.RemoteAddr())
 
 		nctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
@@ -318,6 +327,7 @@ func Server(ctx context.Context, addr string, key string) {
 
 	//chatCh := make(chan chatObject, 1)
 	serverHandle := func(conn net.Conn, _ int) error {
+		log.Printf("server receive new conn:%s", info(conn))
 		cc := ChatClient{conn: conn, aiClient: aiClient}
 		cc.Run(ctx)
 		return nil
@@ -398,7 +408,7 @@ func startStdClient(ctx context.Context, aiClient *openai.Client) {
 			Content: content,
 		})
 		fmt.Printf("answer from chatGPT:\n%s\n", content)
-		fmt.Printf("------------\n %v ---------\n", resp.Usage)
+		fmt.Printf("------------\n %v\n ---------\n", resp.Usage)
 	}
 }
 
