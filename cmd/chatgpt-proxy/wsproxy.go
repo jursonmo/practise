@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -58,9 +59,14 @@ func wsProxy(ctx context.Context, laddr, raddr string) error {
 		}
 	}
 
+	urls, err := url.Parse(laddr)
+	if err != nil {
+		return err
+	}
 	http.HandleFunc("/chatting", chattingHandler)
-	http.HandleFunc("/chat", chatHome)
-	log.Fatal(http.ListenAndServe("localhost:8080", nil))
+	http.HandleFunc("/", chatHome)
+	log.Printf("ws listen on:%s\n", urls.Host)
+	log.Fatal(http.ListenAndServe(urls.Host, nil))
 	return nil
 }
 
@@ -70,7 +76,7 @@ func transReply(rconn net.Conn, wsconn *websocket.Conn) error {
 	for {
 		_, err := io.ReadFull(rconn, data[:2])
 		if err != nil {
-			log.Println("read msg from server err:%v", err)
+			log.Printf("read msg from server err:%v\n", err)
 			return err
 		}
 		len := binary.BigEndian.Uint16(data[:2])
@@ -99,7 +105,6 @@ func getWsConn(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) 
 		log.Print("Error during connection upgradation:", err)
 		return nil, err
 	}
-	defer conn.Close()
 
 	SetReadDeadline(conn, true, 5*time.Minute) // 在收到ping msg 时，就重置read deadline
 	return conn, nil
