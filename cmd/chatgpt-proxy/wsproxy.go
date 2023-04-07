@@ -34,8 +34,11 @@ func wsProxy(ctx context.Context, laddr, raddr string) error {
 			dial.WithKeepAlive(time.Second*20), dial.WithTcpUserTimeout(time.Second*5))
 		if err != nil {
 			wsconn.WriteMessage(websocket.BinaryMessage, []byte("proxy connect to server fail, try again a few minute later"))
+			wsconn.WriteMessage(websocket.CloseMessage, []byte{})
 			return
 		}
+		defer rconn.Close()
+
 		go transReply(rconn, wsconn)
 
 		//transfer to server
@@ -50,6 +53,7 @@ func wsProxy(ctx context.Context, laddr, raddr string) error {
 			if message[len(message)-1] != '\n' {
 				message = append(message, '\n')
 			}
+			log.Printf("%s, last byte:%v\n", message, message[len(message)-1])
 			_, err = rconn.Write(message)
 			if err != nil {
 				log.Printf("write to server err:%v\n", err)
@@ -72,20 +76,34 @@ func wsProxy(ctx context.Context, laddr, raddr string) error {
 
 //websocket client 只接受payload
 func transReply(rconn net.Conn, wsconn *websocket.Conn) error {
-	data := make([]byte, 1024*32)
+	defer rconn.Close()
+	defer wsconn.Close()
+
+	maxSize := 1024 * 32
+	data := make([]byte, maxSize)
 	for {
-		_, err := io.ReadFull(rconn, data[:2])
+		_, err := io.ReadFull(rconn, data[:HeaderSize])
 		if err != nil {
 			log.Printf("read msg from server err:%v\n", err)
 			return err
 		}
-		len := binary.BigEndian.Uint16(data[:2])
-
-		err = wsconn.WriteMessage(websocket.BinaryMessage, data[2:len])
+		len := binary.BigEndian.Uint16(data[:HeaderSize])
+		if int(len) > maxSize {
+			log.Printf("len:%d to bigger", len)
+			return err
+		}
+		_, err = io.ReadFull(rconn, data[:len])
+		if err != nil {
+			log.Printf("read msg from server err:%v\n", err)
+			return err
+		}
+		log.Printf("reply payload len:%d\n", len)
+		err = wsconn.WriteMessage(websocket.TextMessage, data[:len]) //用BinaryMessage 浏览器显示不出来
 		if err != nil {
 			log.Printf("write to client err:%v\n", err)
 			return err
 		}
+		log.Printf("write reply to ws client ok:%d\n", len)
 	}
 }
 
