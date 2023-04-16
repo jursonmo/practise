@@ -162,10 +162,10 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 	//1.客户端读模式, 启用了batch读(说明后台有任务负责批量读), 这里只需从队列里读
 	//2.服务端模式, 不管是否批量读，都是由listen socket去完成读，UDPConn只需从队列里读
 	select {
-	case b := <-c.rxqueueB:
+	case b := <-c.rxqueueB: //[]byte rxqueue
 		n = copy(buf, b)
 		return
-	case b := <-c.rxqueue:
+	case b := <-c.rxqueue: //MyBuffer rxqueue
 		n, err = b.Read(buf)
 		Release(b)
 		return
