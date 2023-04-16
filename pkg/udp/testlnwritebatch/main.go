@@ -18,7 +18,8 @@ func main() {
 }
 
 func server() {
-	//l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithReuseport(true), udp.WithListenerNum(2))
+	//如果只是开启reuseport, 没有指明listener 个数，那么按CPU个数来设置listener 个数
+	//l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithReuseport(true))
 	//只需设置WithListenerNum 大于 1 就表示开启reuseport
 	l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithListenerNum(2))
 	if err != nil {
