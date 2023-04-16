@@ -18,7 +18,9 @@ func main() {
 }
 
 func server() {
-	l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithReuseport(true), udp.WithListenerNum(2))
+	//l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithReuseport(true), udp.WithListenerNum(2))
+	//只需设置WithListenerNum 大于 1 就表示开启reuseport
+	l, err := udp.NewUdpListen(context.Background(), "udp", "0.0.0.0:3333", udp.WithListenerNum(2))
 	if err != nil {
 		panic(err)
 	}

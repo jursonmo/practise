@@ -113,11 +113,17 @@ func (cfg *ListenConfig) Tidy() error {
 		return fmt.Errorf("network or addr is empty")
 	}
 
-	if !cfg.reuseport {
-		cfg.listenerNum = 1
+	//如果没有设置listener 的数量, 那么如果开启reuseport,就按cpu的个数来，否则就认为没有开口reuseport，即listner 数量只有一个
+	if cfg.listenerNum == 0 {
+		if cfg.reuseport {
+			cfg.listenerNum = runtime.GOMAXPROCS(0)
+		} else {
+			cfg.listenerNum = 1
+		}
 	}
-	if cfg.reuseport && cfg.listenerNum == 0 {
-		cfg.listenerNum = runtime.GOMAXPROCS(0)
+
+	if cfg.listenerNum <= 0 {
+		log.Panicln("invaild, listenerNum <= 0")
 	}
 
 	if cfg.maxPacketSize == 0 {
