@@ -55,7 +55,7 @@ func (l *Listener) writeBatchLoop() {
 	bw, _ := NewPCBioWriter(l.pc, l.batchs)
 	l.writeBatchAble = true
 	defer func() { l.writeBatchAble = false }()
-	defer log.Printf("listener %v, writeBatchLoop quit", l.pc.LocalAddr())
+	defer log.Printf("id:%d, listener %v, writeBatchLoop quit", l.id, l.pc.LocalAddr())
 
 	bw.WriteBatchLoop(l.txqueue)
 	/*
@@ -189,7 +189,7 @@ func (bw *PCBufioWriter) Flush() error {
 		if len(msgs) == 0 {
 			return nil
 		}
-		n, err := bw.pc.WriteBatch(msgs, 0)
+		n, err := bw.pc.WriteBatch(msgs, 0) //如果不是linux 平台，会报错：sendmsg invaild parameter
 		if err != nil {
 			bw.err = err
 			return err
