@@ -53,7 +53,7 @@ func wsProxy(ctx context.Context, laddr, raddr string) error {
 			if message[len(message)-1] != '\n' {
 				message = append(message, '\n')
 			}
-			log.Printf("%s, last byte:%v\n", message, message[len(message)-1])
+			//log.Printf("%s, last byte:%v\n", message, message[len(message)-1])
 			_, err = rconn.Write(message)
 			if err != nil {
 				log.Printf("write to server err:%v\n", err)
