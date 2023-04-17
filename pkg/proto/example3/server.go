@@ -27,39 +27,41 @@ func main() {
 			fmt.Println("ERROR", err)
 			continue
 		}
-		//echo
-		msgHandler := func(pc *proto.ProtoConn, d []byte) error {
-			fmt.Printf("receive from %v msg:%s\n", pc, string(d))
-			_, err := pc.Write(d)
-			if err != nil {
-				log.Printf("server write back err:%v", err)
-				return err
-			}
-			return nil
-		}
-		//设置proto.WithAuthHandler后，默认authOk == false, 即不允许收发用户数据， 表示需要验证通过后才行收发用户数据
-		pconn := proto.NewProtoConn(conn, true, msgHandler,
-			proto.WithHandShakeData(genHandshakeData), proto.WithAuthHandler(auth))
+		go handleConn(conn)
+	}
+}
 
-		go func() {
-			ctx := context.Background()
-			err = pconn.Handshake(ctx)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			//auth:
-			err = pconn.Auth(ctx)
-			if err != nil {
-				log.Panic(err)
-				return
-			}
-			err = pconn.Run(ctx)
-			if err != nil {
-				log.Printf("Run err:%v\n", err)
-				return
-			}
-		}()
+func handleConn(conn net.Conn) {
+	//echo
+	msgHandler := func(pc *proto.ProtoConn, d []byte) error {
+		fmt.Printf("receive from %v msg:%s\n", pc, string(d))
+		_, err := pc.Write(d)
+		if err != nil {
+			log.Printf("server write back err:%v", err)
+			return err
+		}
+		return nil
+	}
+	//设置proto.WithAuthHandler后，默认authOk == false, 即不允许收发用户数据， 表示需要验证通过后才行收发用户数据
+	pconn := proto.NewProtoConn(conn, true, msgHandler,
+		proto.WithHandShakeData(genHandshakeData), proto.WithAuthHandler(auth))
+
+	ctx := context.Background()
+	err := pconn.Handshake(ctx)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	//auth:
+	err = pconn.Auth(ctx)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+	err = pconn.Run(ctx)
+	if err != nil {
+		log.Printf("Run err:%v\n", err)
+		return
 	}
 }
 
