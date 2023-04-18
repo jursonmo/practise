@@ -178,6 +178,7 @@ func (bw *PCBufioWriter) Buffered() int {
 	return bw.buffered()
 }
 
+//not return until flush all msg; 直到发送完缓存中的所有数据才返回
 func (bw *PCBufioWriter) Flush() error {
 	log.Printf("local %v, flushing %d packet....", bw.pc.LocalAddr(), len(bw.wms))
 	if bw.err != nil {
@@ -205,7 +206,8 @@ func (w *writeBatchMsg) init(capability int) {
 }
 
 func (w *writeBatchMsg) buffered() int {
-	return len(w.msgBuffered())
+	return len(w.wms) - w.offset
+	//return len(w.msgBuffered())
 }
 
 func (w *writeBatchMsg) addMsg(b MyBuffer) (flush bool) {
@@ -243,6 +245,7 @@ func (w *writeBatchMsg) commit(sended int) {
 
 	//已经全部发完了，重置
 	if w.offset == len(w.wms) {
+		//log.Printf("--------- w.offset:%d, 已经全部发完了，重置\n", w.offset) //test ok
 		w.offset = 0
 		w.wms = w.wms[:0]
 		w.buffers = w.buffers[:0]
