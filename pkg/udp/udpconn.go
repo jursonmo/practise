@@ -207,13 +207,27 @@ func (c *UDPConn) PutTxQueue(b MyBuffer) error {
 	return nil
 }
 
+//目前server 产生的UDPConn 暂时不支持SetDeadline
 func (c *UDPConn) SetDeadline(t time.Time) error {
+	if c.client {
+		err := c.lconn.SetReadDeadline(t)
+		if err != nil {
+			return err
+		}
+		return c.lconn.SetWriteDeadline(t)
+	}
 	return nil
 }
 
 func (c *UDPConn) SetReadDeadline(t time.Time) error {
+	if c.client {
+		return c.lconn.SetReadDeadline(t)
+	}
 	return nil
 }
 func (c *UDPConn) SetWriteDeadline(t time.Time) error {
+	if c.client {
+		return c.lconn.SetWriteDeadline(t)
+	}
 	return nil
 }
