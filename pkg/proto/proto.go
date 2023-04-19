@@ -161,9 +161,6 @@ func (p *ProtoPkg) Bytes() []byte {
 		log.Panicf("------")
 	}
 	buf = append(buf, p.Payload...)
-	if len(p.options) > 0 {
-		log.Printf("first opt type:%d", buf[ProtoHeaderSize])
-	}
 	//check
 	if len(buf) != int(ph.Hlen)+int(ph.Plen) {
 		log.Panicf("len(buf):%d,  int(ph.Hlen)+int(ph.Plen)=%d+%d=%d", len(buf), ph.Hlen, ph.Plen, uint32(ph.Hlen)+ph.Plen)
@@ -283,6 +280,7 @@ func (opt *ProtoHeaderOption) TypeName() string {
 		return fmt.Sprintf("Unkown Option Type:%d", opt.T)
 	}
 }
+
 func (po ProtoHeaderOption) Len() int {
 	l := len(po.V)
 	if len(po.V) < 127 {
@@ -343,7 +341,7 @@ func OptionsLen(pos []ProtoHeaderOption) int {
 	}
 	if sum > math.MaxUint16 {
 		//todo:
-		log.Panicf("options sum len(%d) > math.MaxUint16() ", sum, math.MaxUint16)
+		log.Panicf("options sum len(%d) > math.MaxUint16(%d) ", sum, math.MaxUint16)
 	}
 	return sum
 }
@@ -362,7 +360,7 @@ func EncodeOpts(pos []ProtoHeaderOption) []byte {
 
 	//check
 	if len(b) != len(buf) {
-		fmt.Println("notice, ProtoHeaderOption len:%d, but after encode len:%d", l, len(b))
+		log.Printf("notice, ProtoHeaderOption len:%d, but after encode len:%d\n", l, len(b))
 		panic("")
 	}
 	return b
