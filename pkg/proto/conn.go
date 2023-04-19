@@ -104,8 +104,8 @@ func WithHandShake(f func(ctx context.Context, conn net.Conn) error) ProtoConnOp
 
 //
 func DefaultHandShake(ctx context.Context, conn net.Conn) error {
-	handshakePwd := []byte("hello")
-	_, err := conn.Write(handshakePwd)
+	handshakeToken := []byte("hello")
+	_, err := conn.Write(handshakeToken)
 	if err != nil {
 		return err
 	}
@@ -115,14 +115,14 @@ func DefaultHandShake(ctx context.Context, conn net.Conn) error {
 	}
 	conn.SetReadDeadline(deadline)
 
-	buf := make([]byte, len(handshakePwd))
+	buf := make([]byte, len(handshakeToken))
 	_, err = io.ReadFull(conn, buf)
 	if err != nil {
 		return err
 	}
 
 	conn.SetReadDeadline(time.Time{})
-	if !reflect.DeepEqual(buf, handshakePwd) {
+	if !reflect.DeepEqual(buf, handshakeToken) {
 		return errors.New("handshake fail")
 	}
 	return err
@@ -132,8 +132,21 @@ func (pc *ProtoConn) SetUserMsgHandler(h func(pc *ProtoConn, data []byte) error)
 	pc.msgHandler = h
 }
 
+func (pc *ProtoConn) PingHandler() func(data []byte) error {
+	return pc.pingHandler
+}
+
 func (pc *ProtoConn) SetPingHandler(h func(data []byte) error) {
 	pc.pingHandler = h
+}
+
+func (pc *ProtoConn) WritePing(d []byte) error {
+	pingPkg, err := NewPingPkg(d)
+	if err != nil {
+		return err
+	}
+	_, err = pc.conn.Write(pingPkg.Bytes())
+	return err
 }
 
 func (pc *ProtoConn) WritePong(d []byte) error {
@@ -143,6 +156,10 @@ func (pc *ProtoConn) WritePong(d []byte) error {
 	}
 	_, err = pc.conn.Write(pongPkg.Bytes())
 	return err
+}
+
+func (pc *ProtoConn) PongHandler() func(data []byte) error {
+	return pc.pongHandler
 }
 
 func (pc *ProtoConn) SetPongHandler(h func(data []byte) error) {
@@ -351,7 +368,7 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 
 	var err error
 	defer func() {
-		log.Println(err)
+		log.Printf("Run task quit, err:%v", err)
 	}()
 
 	for {
@@ -383,6 +400,9 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 				return fmt.Errorf("pingHandler err:%w", err)
 			}
 		case Pong:
+			if pc.pongHandler == nil {
+				continue
+			}
 			err = pc.pongHandler(pkg.Payload)
 			if err != nil {
 				return fmt.Errorf("pongHandler err:%w", err)
