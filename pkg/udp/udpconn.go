@@ -154,6 +154,9 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 	return c.raddr
 }
 
+//内核copy 一次数据到MyBuffer, 这里也会发生一次copy 到业务层。
+//如果业务层用了bufio, 这里这次copy是copy 到 bufio 的buf 里，再等待业务层copy
+//也就是三次copy 操作。比正常的操作多一次copy
 func (c *UDPConn) Read(buf []byte) (n int, err error) {
 	//客户端读模式，又不启用batch, 就一个个读
 	if c.client && c.readBatchs == 0 {
@@ -216,6 +219,7 @@ func (c *UDPConn) SetDeadline(t time.Time) error {
 		}
 		return c.lconn.SetWriteDeadline(t)
 	}
+	//todo: server conn SetDeadline
 	return nil
 }
 
@@ -223,11 +227,13 @@ func (c *UDPConn) SetReadDeadline(t time.Time) error {
 	if c.client {
 		return c.lconn.SetReadDeadline(t)
 	}
+	//todo: server conn SetReadDeadline
 	return nil
 }
 func (c *UDPConn) SetWriteDeadline(t time.Time) error {
 	if c.client {
 		return c.lconn.SetWriteDeadline(t)
 	}
+	//todo: server conn SetWriteDeadline
 	return nil
 }
