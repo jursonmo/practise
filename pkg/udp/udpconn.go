@@ -15,7 +15,7 @@ var ErrConnClosed = errors.New("Conn Closed")
 type UDPConn struct {
 	mux    sync.Mutex
 	ln     *Listener
-	client bool //client 表示lconn is conneted(绑定了目的地址), 即可以直接用Write，不需要WriteTo
+	client bool //true表示lconn is conneted(绑定了目的地址), 即可以直接用Write，不需要WriteTo
 	lconn  *net.UDPConn
 	pc     *ipv4.PacketConn
 	raddr  *net.UDPAddr
@@ -33,6 +33,10 @@ type UDPConn struct {
 	writeBatchs int //表示是否需要单独为此conn 后台起goroutine来批量写
 	maxBufSize  int
 
+	readTimer  *time.Timer
+	writeTimer *time.Timer
+
+	err    error
 	closed bool
 	dead   chan struct{}
 }
@@ -121,6 +125,12 @@ func (c *UDPConn) PutRxQueue(data []byte) {
 	}
 }
 
+func (c *UDPConn) IsClosed() bool {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	return c.closed
+}
+
 func (c *UDPConn) Close() error {
 	c.mux.Lock()
 	if c.closed == true {
@@ -129,6 +139,15 @@ func (c *UDPConn) Close() error {
 	}
 	c.closed = true
 	c.mux.Unlock()
+
+	if c.readTimer != nil {
+		c.readTimer.Stop()
+		c.readTimer = nil
+	}
+	if c.writeTimer != nil {
+		c.writeTimer.Stop()
+		c.writeTimer = nil
+	}
 
 	close(c.dead)
 	if c.txqueue != nil {
@@ -142,8 +161,8 @@ func (c *UDPConn) Close() error {
 	}
 	if c.client && c.lconn != nil {
 		c.lconn.Close()
-		log.Printf("client:%v, %s<->%s, close over\n", c.client, c.LocalAddr().String(), c.RemoteAddr().String())
 	}
+	log.Printf("client:%v, %s<->%s, close over\n", c.client, c.LocalAddr().String(), c.RemoteAddr().String())
 	return nil
 }
 
@@ -173,6 +192,9 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 		Release(b)
 		return
 	case <-c.dead:
+		if c.err != nil {
+			return 0, c.err
+		}
 		return 0, ErrConnClosed
 	}
 }
@@ -187,6 +209,10 @@ func (c *UDPConn) Write(b []byte) (n int, err error) {
 	}
 
 	//the conn that accepted by listener
+	//由listener accept产生的UDPConn, 发送前判断是否是关闭状态. dial 产生UDPConn，如果已经关闭，底层socket 会报错返回，不需要判断
+	if c.closed {
+		return 0, ErrConnClosed
+	}
 	if c.ln.WriteBatchAble() {
 		return c.WriteWithBatch(b)
 	}
@@ -207,33 +233,5 @@ func (c *UDPConn) PutTxQueue(b MyBuffer) error {
 		Release(b)
 		return ErrTxQueueFull
 	}
-	return nil
-}
-
-//目前server 产生的UDPConn 暂时不支持SetDeadline
-func (c *UDPConn) SetDeadline(t time.Time) error {
-	if c.client {
-		err := c.lconn.SetReadDeadline(t)
-		if err != nil {
-			return err
-		}
-		return c.lconn.SetWriteDeadline(t)
-	}
-	//todo: server conn SetDeadline
-	return nil
-}
-
-func (c *UDPConn) SetReadDeadline(t time.Time) error {
-	if c.client {
-		return c.lconn.SetReadDeadline(t)
-	}
-	//todo: server conn SetReadDeadline
-	return nil
-}
-func (c *UDPConn) SetWriteDeadline(t time.Time) error {
-	if c.client {
-		return c.lconn.SetWriteDeadline(t)
-	}
-	//todo: server conn SetWriteDeadline
 	return nil
 }
