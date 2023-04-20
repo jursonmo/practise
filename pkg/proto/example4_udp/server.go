@@ -63,16 +63,23 @@ func handleConn(conn net.Conn) error {
 		log.Panic(err)
 		return err
 	}
-	// udp server conn SetDeadline 还没有实现
-	// SetReadDeadline(pconn, true, time.Second*3)
+
+	// udp server conn SetDeadline
+	SetReadDeadline(pconn, true, time.Second*3)
 
 	// run: read loop
 	err = pconn.Run(ctx)
 	if err != nil {
 		log.Printf("Run err:%v\n", err)
-		return err
 	}
-	return nil
+	//check write operation
+	//超时后，测试下发送数据
+	_, err = pconn.Write([]byte("xxxxx"))
+	if err == nil {
+		panic("expect write err")
+	}
+	log.Printf("after timeout, write err:%v\n", err)
+	return err
 }
 
 //用于验证client 发过来的握手数据否跟服务器设定HandshakeData一致。

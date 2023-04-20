@@ -91,7 +91,13 @@ loop:
 
 	//客户端没有再发ping消息, 等待client 主动超时
 	log.Printf("等待客户端超时。。。。\n")
-	time.Sleep(time.Hour)
+	time.Sleep(time.Second * 8)
+	//超时后，测试下发送数据
+	_, err = pconn.Write([]byte("xxxxx"))
+	if err == nil {
+		panic("expect write err")
+	}
+	log.Printf("after timeout, write err:%v\n", err)
 }
 
 func msgHandler(pc *proto.ProtoConn, d []byte) error {
