@@ -26,8 +26,8 @@ type ProtoConn struct {
 	handshaker    func(ctx context.Context, conn net.Conn) error
 	handshakeData func() []byte
 	msgHandler    func(pc *ProtoConn, d []byte) error
-	pingHandler   func(d []byte) error //when receive ping
-	pongHandler   func(d []byte) error //when receive pong
+	pingHandler   func(d []byte) error //invoked when receive ping
+	pongHandler   func(d []byte) error //invoked when receive pong
 
 	authReqData func() []byte                 // for client conn, if not nil, means need to send auth request data
 	authHandler func(d []byte) ([]byte, bool) //for server conn: it will be invoked when receive request data
@@ -206,6 +206,7 @@ func (pc *ProtoConn) Write(d []byte) (int, error) {
 	}
 	return pc.conn.Write(pkg.Bytes())
 }
+
 func (pc *ProtoConn) clientHandshake(ctx context.Context) error {
 	d := pc.handshakeData()
 	pingPkg, err := NewPingPkg(d)
@@ -258,7 +259,7 @@ func (pc *ProtoConn) serverHandshake(ctx context.Context) error {
 	//if this is ping ,response pong
 	if handshake.PkgType() == Ping {
 		if pc.pingHandler != nil {
-			pc.pingHandler(handshake.Payload)
+			return pc.pingHandler(handshake.Payload)
 		}
 	}
 	return nil
