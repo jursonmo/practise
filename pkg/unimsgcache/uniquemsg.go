@@ -110,13 +110,15 @@ func (q *UniMsgCache) GetN(n int) []UniMsg {
 	return msgs
 }
 
-//it can be block
+//it can be blocked until there is msg return
 func (q *UniMsgCache) BGetAll() []UniMsg {
-	msgs := q.GetAll()
-	if len(msgs) == 0 {
+	for {
+		msgs := q.GetAll()
+		if len(msgs) > 0 {
+			return msgs
+		}
 		<-q.event
 	}
-	return msgs
 }
 
 func (q *UniMsgCache) GetAll() []UniMsg {
