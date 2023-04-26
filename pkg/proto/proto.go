@@ -21,8 +21,8 @@ type ProtoPkg struct {
 }
 
 type ProtoHeader struct {
-	Ver  byte
-	Type byte //CtrlType 1-4, BodyType, 5-8
+	Ver  byte // ver:bit [0-3], cmd: bit [4-7]
+	Type byte //CtrlType [0-3], BodyType,[4-7]
 	Hlen uint16
 	Plen uint32 //payload len
 }
@@ -221,7 +221,8 @@ func (p *ProtoPkg) Decode(r io.Reader) error {
 	ph := ProtoHeaderBinary(phBuf).Decode()
 	//fmt.Printf("Decoding ph:%v\n", &ph)
 
-	if ph.Ver == Ver1 {
+	ver := ph.GetVer()
+	if ver == Ver1 {
 		p.ProtoHeader = ph
 		//have options?
 		if ph.Hlen > ProtoHeaderSize {
@@ -261,7 +262,7 @@ func (p *ProtoPkg) Decode(r io.Reader) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("unspport pkg version:%d", ph.Ver)
+	return fmt.Errorf("unspport pkg version:%d", ver)
 }
 
 func (opt *ProtoHeaderOption) String() string {
@@ -351,7 +352,8 @@ func EncodeOpts(pos []ProtoHeaderOption) []byte {
 		return nil
 	}
 	l := OptionsLen(pos)
-	buf := make([]byte, l)
+	//buf := make([]byte, l)
+	buf := make([]byte, 0, l)
 	buffer := bytes.NewBuffer(buf)
 	for _, po := range pos {
 		po.WriteToBuffer(buffer)
@@ -392,6 +394,12 @@ func DecodeOpts(b []byte) (pos []ProtoHeaderOption) {
 type ProtoHeaderBinary []byte
 
 func (pbb ProtoHeaderBinary) Decode() (ph ProtoHeader) {
+	// buf := bytes.NewBuffer(pbb)
+	// ph.Ver, _ = buf.ReadByte()
+	// ph.Type, _ = buf.ReadByte()
+	// binary.Read(buf, binary.BigEndian, &ph.Hlen)
+	// binary.Read(buf, binary.BigEndian, &ph.Plen)
+
 	ph.Ver = pbb[0]
 	ph.Type = pbb[1]
 	ph.Hlen = binary.BigEndian.Uint16(pbb[2:])
@@ -401,7 +409,11 @@ func (pbb ProtoHeaderBinary) Decode() (ph ProtoHeader) {
 
 func (ph *ProtoHeader) String() string {
 	return fmt.Sprintf("%s, ver:%d, Type:%d(pkgType:%d, payloadType:%d), Hlen:%d, PayloadLen:%d",
-		ph.PkgTypeName(), ph.Ver, ph.Type, ph.PkgType(), ph.PayloadType(), ph.Hlen, ph.Plen)
+		ph.PkgTypeName(), ph.GetVer(), ph.Type, ph.PkgType(), ph.PayloadType(), ph.Hlen, ph.Plen)
+}
+
+func (ph *ProtoHeader) GetVer() byte {
+	return (ph.Ver << 4) >> 4
 }
 
 func (ph *ProtoHeader) PkgTypeName() string {
