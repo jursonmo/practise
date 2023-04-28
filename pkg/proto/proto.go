@@ -22,7 +22,7 @@ type ProtoPkg struct {
 
 type ProtoHeader struct {
 	Ver  byte // ver:bit [0-3], cmd: bit [4-7]
-	Type byte //CtrlType [0-3], BodyType,[4-7]
+	Type byte //PkgType [0-3], PayLoadType,[4-7]
 	Hlen uint16
 	Plen uint32 //payload len
 }
@@ -43,7 +43,7 @@ const (
 	//version
 	Ver1 = 1
 
-	//packag Message type
+	//PkgType: packag Message type
 	Msg        = 0
 	Ping       = 1
 	Pong       = 2
@@ -186,10 +186,11 @@ func (p *ProtoPkg) Marshal(v interface{}, codecName string) error {
 	}
 	p.ProtoHeader = ProtoHeader{
 		Ver: Ver1,
-		//Type: ,
+		//Type: Msg,
 		Hlen: ProtoHeaderSize,
 		Plen: uint32(len(payload)),
 	}
+	p.SetPkgType(Msg)
 	p.SetPayloadType(t)
 	p.Payload = payload
 	return nil
@@ -433,6 +434,10 @@ func (ph *ProtoHeader) PkgTypeName() string {
 
 func (ph *ProtoHeader) PkgType() byte {
 	return (ph.Type << 4) >> 4
+}
+
+func (ph *ProtoHeader) SetPkgType(t byte) {
+	ph.Type = ph.Type&0xf0 | t
 }
 
 func (ph *ProtoHeader) PayloadType() PayloadType {
