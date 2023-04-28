@@ -223,47 +223,53 @@ func (p *ProtoPkg) Decode(r io.Reader) error {
 	//fmt.Printf("Decoding ph:%v\n", &ph)
 
 	ver := ph.GetVer()
-	if ver == Ver1 {
-		p.ProtoHeader = ph
-		//have options?
-		if ph.Hlen > ProtoHeaderSize {
-			buf := make([]byte, int(ph.Hlen-ProtoHeaderSize))
-			_, err = io.ReadFull(r, buf)
-			if err != nil {
-				return err
-			}
-			//log.Printf("options buf, len:%d, buf[0]:%d\n", len(buf), buf[0])
-			opts := make([]ProtoHeaderOption, 0, 1)
-			buffer := bytes.NewBuffer(buf)
-			i := 0
-			for {
-				i++
-				opt := ProtoHeaderOption{}
-				err := opt.DecodeFromBuffer(buffer)
-				if err == io.EOF { //read the end of buffer, it is normal, just break and go on
-					break
-				}
-				if err != nil {
-					log.Printf("DecodeFromBuffer:%v", err)
-					return err
-				}
-				//log.Printf("Decode, opt_index:%d, opt:%v\n", i, &opt)
-				opts = append(opts, opt)
-			}
-			p.options = opts
-		}
-		//have payload ?
-		if ph.Plen > 0 {
-			buf := make([]byte, int(ph.Plen))
-			_, err = io.ReadFull(r, buf)
-			if err != nil {
-				return err
-			}
-			p.Payload = buf
-		}
-		return nil
+	switch ver {
+	case Ver1:
+		return p.Ver1Decode(r, ph)
+	default:
+		return fmt.Errorf("unspport pkg version:%d", ver)
 	}
-	return fmt.Errorf("unspport pkg version:%d", ver)
+}
+
+func (p *ProtoPkg) Ver1Decode(r io.Reader, ph ProtoHeader) error {
+	p.ProtoHeader = ph
+	//have options?
+	if ph.Hlen > ProtoHeaderSize {
+		buf := make([]byte, int(ph.Hlen-ProtoHeaderSize))
+		_, err := io.ReadFull(r, buf)
+		if err != nil {
+			return err
+		}
+		//log.Printf("options buf, len:%d, buf[0]:%d\n", len(buf), buf[0])
+		opts := make([]ProtoHeaderOption, 0, 1)
+		buffer := bytes.NewBuffer(buf)
+		i := 0
+		for {
+			i++
+			opt := ProtoHeaderOption{}
+			err := opt.DecodeFromBuffer(buffer)
+			if err == io.EOF { //read the end of buffer, it is normal, just break and go on
+				break
+			}
+			if err != nil {
+				log.Printf("DecodeFromBuffer:%v", err)
+				return err
+			}
+			//log.Printf("Decode, opt_index:%d, opt:%v\n", i, &opt)
+			opts = append(opts, opt)
+		}
+		p.options = opts
+	}
+	//have payload ?
+	if ph.Plen > 0 {
+		buf := make([]byte, int(ph.Plen))
+		_, err := io.ReadFull(r, buf)
+		if err != nil {
+			return err
+		}
+		p.Payload = buf
+	}
+	return nil
 }
 
 func (opt *ProtoHeaderOption) String() string {
