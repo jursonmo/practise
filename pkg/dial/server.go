@@ -54,6 +54,7 @@ func WithHandler(handler ConnHandler) ServerOption {
 	}
 }
 
+//底层都是tcp listener, 如果是tls, 用原始tcp listener 和tlsConfig 生成新的tls listener: tls.NewListener(l, tlsConfig), 同样是net.Listener
 func NewServer(addrs []string, options ...ServerOption) (*Server, error) {
 	s := &Server{}
 	for _, opt := range options {
@@ -87,7 +88,9 @@ func NewServer(addrs []string, options ...ServerOption) (*Server, error) {
 			if !ok {
 				return nil, fmt.Errorf("AppendCertsFromPEM err")
 			}
-
+			if s.tlsConf == nil {
+				s.tlsConf = new(tls.Config)
+			}
 			s.tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
 			s.tlsConf.ClientCAs = clientCertPool
 		}
