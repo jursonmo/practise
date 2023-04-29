@@ -3,6 +3,7 @@ package proto
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -69,6 +70,7 @@ func (c *ProtoConn) SetWriteDeadline(t time.Time) error {
 func (pc *ProtoConn) Close() {
 	pc.conn.Close()
 	pc.isClosed = true
+
 }
 
 type ProtoConnOpt func(*ProtoConn)
@@ -191,6 +193,18 @@ func (pc *ProtoConn) SendAuthReq(d []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (pc *ProtoConn) WriteCloseMsg(code int, msg string) (int, error) {
+	data, err := json.Marshal(CloseCmdPayLoad{Code: code, Msg: msg})
+	if err != nil {
+		return 0, err
+	}
+	pkg, err := EncodeCmdPkg(CloseCmd, data)
+	if err != nil {
+		return 0, err
+	}
+	return pc.conn.Write(pkg.Bytes())
 }
 
 var ErrUnauth = errors.New("unauth")

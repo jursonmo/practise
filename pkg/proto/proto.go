@@ -33,6 +33,11 @@ type ProtoHeaderOption struct {
 	V []byte
 }
 
+type CloseCmdPayLoad struct {
+	Code int
+	Msg  string
+}
+
 type PayloadType byte
 
 var BufSizeErr = errors.New("buf size error")
@@ -42,6 +47,10 @@ const (
 
 	//version
 	Ver1 = 1
+	//Cmd:
+	InitCmd  = 1 //init Connect
+	CloseCmd = 2
+	Trace    = 3
 
 	//PkgType: packag Message type
 	Msg        = 0
@@ -111,6 +120,14 @@ func NewAuthRespPkg(resp []byte, authOk bool) (*ProtoPkg, error) {
 	v := resp
 	authOpt := ProtoHeaderOption{T: byte(t), L: uint16(len(v)), V: v}
 	return EncodePkg(nil, Auth, 0, []ProtoHeaderOption{authOpt}...)
+}
+
+func EncodeCmdPkg(cmd byte, payload []byte) (*ProtoPkg, error) {
+	p := NewProtoPkg()
+	p.ProtoHeader = ProtoHeader{Ver: Ver1, Hlen: ProtoHeaderSize, Plen: uint32(len(payload))}
+	p.SetCmd(cmd)
+	p.Payload = payload
+	return p, nil
 }
 
 func EncodePkg(payload []byte, pkgType byte, payloadType PayloadType, opts ...ProtoHeaderOption) (*ProtoPkg, error) {
@@ -269,7 +286,16 @@ func (p *ProtoPkg) Ver1Decode(r io.Reader, ph ProtoHeader) error {
 		}
 		p.Payload = buf
 	}
+
+	cmd := ph.GetCmd()
+	if cmd == CloseCmd {
+		return FormatCloseCmdErr(p.Payload)
+	}
 	return nil
+}
+
+func FormatCloseCmdErr(d []byte) error {
+	return fmt.Errorf("%s", string(d))
 }
 
 func (opt *ProtoHeaderOption) String() string {
@@ -421,6 +447,18 @@ func (ph *ProtoHeader) String() string {
 
 func (ph *ProtoHeader) GetVer() byte {
 	return (ph.Ver << 4) >> 4
+}
+
+func (ph *ProtoHeader) SetVer(v byte) {
+	ph.Ver = ph.Ver&0xf0 | v
+}
+
+func (ph *ProtoHeader) GetCmd() byte {
+	return ph.Ver >> 4
+}
+
+func (ph *ProtoHeader) SetCmd(cmd byte) {
+	ph.Ver = ph.Ver&0x0f | cmd<<4
 }
 
 func (ph *ProtoHeader) PkgTypeName() string {
