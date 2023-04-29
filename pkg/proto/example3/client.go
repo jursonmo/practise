@@ -53,7 +53,7 @@ func main() {
 		i++
 		if i > 3 {
 			fmt.Printf("send close msg\n")
-			_, err := pconn.WriteCloseMsg(1000, "client have no data to send")
+			_, err := pconn.WriteCloseMsg(proto.CloseNormalClosure, "client have no data to send")
 			if err != nil {
 				log.Panic(err)
 			}
