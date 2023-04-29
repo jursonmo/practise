@@ -51,6 +51,15 @@ func main() {
 	i := 0
 	for {
 		i++
+		if i > 3 {
+			fmt.Printf("send close msg\n")
+			_, err := pconn.WriteCloseMsg(1000, "client have no data to send")
+			if err != nil {
+				log.Panic(err)
+			}
+			time.Sleep(time.Second)
+			return
+		}
 		msg := fmt.Sprintf("%d", i)
 		fmt.Printf("write %s \n", msg)
 		_, err := pconn.Write([]byte(msg))
@@ -59,6 +68,7 @@ func main() {
 			return
 		}
 		time.Sleep(time.Second * 2)
+
 	}
 }
 
