@@ -160,7 +160,11 @@ func EncodePkg(payload []byte, pkgType byte, payloadType PayloadType, opts ...Pr
 
 	phType := pkgType | byte(payloadType<<4)
 	optsLen := uint16(OptionsLen(opts))
-	p := &ProtoPkg{ProtoHeader: ProtoHeader{Ver: Ver1, Type: byte(phType), Hlen: ProtoHeaderSize + optsLen, Plen: uint32(len(payload))}}
+
+	//p := &ProtoPkg{ProtoHeader: ProtoHeader{Ver: Ver1, Type: byte(phType), Hlen: ProtoHeaderSize + optsLen, Plen: uint32(len(payload))}}
+	p := NewProtoPkg()
+	p.ProtoHeader = ProtoHeader{Ver: Ver1, Type: byte(phType), Hlen: ProtoHeaderSize + optsLen, Plen: uint32(len(payload))}
+
 	p.options = opts
 	p.Payload = payload
 	return p, nil
