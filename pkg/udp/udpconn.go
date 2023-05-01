@@ -22,6 +22,10 @@ type UDPConn struct {
 	// rms     []ipv4.Message
 	// wms     []ipv4.Message
 	// batch   bool
+
+	undrainedBufferMux  sync.Mutex
+	lastUndrainedBuffer MyBuffer //在不要求一次性MyBuffer的内容的时候，没读完的就放在lastUndrainedBuffer 里
+
 	txqueue     chan MyBuffer
 	txqueuelen  int
 	rxqueue     chan MyBuffer
@@ -176,11 +180,35 @@ func (c *UDPConn) RemoteAddr() net.Addr {
 //内核copy 一次数据到MyBuffer, 这里也会发生一次copy 到业务层。
 //如果业务层用了bufio, 这里这次copy是copy 到 bufio 的buf 里，再等待业务层copy
 //也就是三次copy 操作。比正常的操作多一次copy
+var oneShot = true
+var shortReadErr = errors.New("short Read error, Read(buf) should parameters buf len is small than udp packet")
+
 func (c *UDPConn) Read(buf []byte) (n int, err error) {
 	//客户端读模式，又不启用batch, 就一个个读
 	if c.client && c.readBatchs == 0 {
 		return c.lconn.Read(buf)
 	}
+
+	//这里有两种处理，
+	//1: oneshot, 要求一次性读完MyBuffer 的内容，一次未读完就报错。
+	//2. 可以不要求一次性读完，没有读完的下次再读, 这样应用层合理的方式就是只有一个线程在调用Read, 但是为了支持多线程读，这里只能加锁。
+	if !oneShot {
+		//如果MyBuffer 的内容支持可以多次读，那么就只允许同时只有一个线程在执行读操作
+		//需要用锁保证这个过程是串行的。否则多个读线程都把没读完的MyBuffer 存储在c.lastUndrainedBuffer, 这就出问题了。
+		c.undrainedBufferMux.Lock()
+		defer c.undrainedBufferMux.Unlock()
+
+		if c.lastUndrainedBuffer != nil {
+			n, err = c.lastUndrainedBuffer.Read(buf)
+			if len(c.lastUndrainedBuffer.Bytes()) == 0 {
+				//已经读完，就释放并重置
+				Release(c.lastUndrainedBuffer)
+				c.lastUndrainedBuffer = nil
+			}
+			return
+		}
+	}
+
 	//1.客户端读模式, 启用了batch读(说明后台有任务负责批量读), 这里只需从队列里读
 	//2.服务端模式, 不管是否批量读，都是由listen socket去完成读，UDPConn只需从队列里读
 	select {
@@ -188,9 +216,30 @@ func (c *UDPConn) Read(buf []byte) (n int, err error) {
 		n = copy(buf, b)
 		return
 	case b := <-c.rxqueue: //MyBuffer rxqueue
-		n, err = b.Read(buf)
-		Release(b)
-		return
+		//这里有两种处理，1: 要求一次性读完MyBuffer 的内容，一次未读完就报错。2. 可以不要求一次性读完，没有读完的下次再读
+		if oneShot {
+			n, err = b.Read(buf)
+			Release(b)
+			if err == nil && len(b.Bytes()) > 0 { //要求一次性读完MyBuffer 的内容，但是没读完，返回shortReadErr
+				err = shortReadErr
+			}
+			return
+		} else {
+			//支持MyBuffer多次读的情况
+			//check, here c.lastUndrainedBuffer must be nil
+			if c.lastUndrainedBuffer != nil {
+				panic("c.lastUndrainedBuffer != nil")
+			}
+			n, err = b.Read(buf)
+			if len(b.Bytes()) == 0 {
+				Release(b) //已经读完了
+			} else {
+				//未读完b 的内容，把b暂存起来
+				c.lastUndrainedBuffer = b //直接设置，因为有c.undrainedBufferMux 锁的保护。
+			}
+			return
+		}
+
 	case <-c.dead:
 		if c.err != nil {
 			return 0, c.err
