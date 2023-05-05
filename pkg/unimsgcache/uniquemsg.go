@@ -5,6 +5,8 @@ import (
 	"sync"
 )
 
+var CacheFullErr = errors.New("cache is full")
+
 //一个缓存：对于key 相同的数据，只保存一份, 比如上报一些数据时，对同一种数据，只需要上报最新的数据即可。
 //Get 数据时随机取, 不分先后。 所以可以用GetAll读取所有msg, 如果msg处理成功，需要调用Ack 来删除缓存里的数据
 //如果Ack时，缓存里的数据已经被更新过了(通过msg.seq 来判断)，就不能删除，因为它是新的数据。
@@ -54,6 +56,11 @@ func (q *UniMsgCache) Put(msg Msg) error {
 	}
 
 	q.Lock()
+	_, ok := q.cache[key]
+	if !ok && q.max > 0 && len(q.cache) > q.max {
+		q.Unlock()
+		return CacheFullErr
+	}
 	q.seq += 1
 	q.cache[key] = UniMsg{seq: q.seq, payload: msg}
 	q.Unlock()
