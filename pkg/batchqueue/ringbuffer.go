@@ -104,6 +104,12 @@ func (r *RingBuffer) Discard(dn int) (n int, err error) {
 	return r.discard(dn)
 }
 
+func (r *RingBuffer) delElement(from, to int) {
+	for i := from; i < to; i++ {
+		r.buf[i] = nil //make it gc
+	}
+}
+
 func (r *RingBuffer) discard(dn int) (n int, err error) {
 	if dn == 0 {
 		return
@@ -116,6 +122,7 @@ func (r *RingBuffer) discard(dn int) (n int, err error) {
 		if n > dn {
 			n = dn
 		}
+		r.delElement(r.r, r.r+n)
 		r.r = (r.r + n) % r.size
 		return
 	}
@@ -124,6 +131,21 @@ func (r *RingBuffer) discard(dn int) (n int, err error) {
 	if n > dn {
 		n = dn
 	}
+	//----------
+	c1 := r.size - r.r
+	if c1 >= dn {
+		r.delElement(r.r, r.r+dn)
+	} else {
+		r.delElement(r.r, r.size)
+		c2 := 0
+		if dn-c1 < r.w {
+			c2 = dn - c1
+		} else {
+			c2 = r.w
+		}
+		r.delElement(0, c2)
+	}
+	//-------------
 	r.r = (r.r + n) % r.size
 	r.isFull = false
 	return
@@ -140,6 +162,7 @@ func (r *RingBuffer) read(p []interface{}) (n int, err error) {
 			n = len(p)
 		}
 		copy(p, r.buf[r.r:r.r+n])
+		r.delElement(r.r, r.r+n)
 		r.r = (r.r + n) % r.size
 		return
 	}
@@ -151,11 +174,14 @@ func (r *RingBuffer) read(p []interface{}) (n int, err error) {
 
 	if r.r+n <= r.size {
 		copy(p, r.buf[r.r:r.r+n])
+		r.delElement(r.r, r.r+n)
 	} else {
 		c1 := r.size - r.r
 		copy(p, r.buf[r.r:r.size])
+		r.delElement(r.r, r.size)
 		c2 := n - c1
 		copy(p[c1:], r.buf[0:c2])
+		r.delElement(0, c2)
 	}
 	r.r = (r.r + n) % r.size
 
