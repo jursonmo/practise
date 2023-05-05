@@ -26,7 +26,8 @@ func WithRoll(roll bool) BqOption {
 
 //借鉴github.com/segmentio/kafka-go@v0.4.32/writer.go 但是它会分配新的内存块
 type batchQueue struct {
-	rb *RingBuffer
+	//b *RingBuffer
+	buf Buffer
 	//queue []interface{}
 	option BqOptions
 	// Pointers are used here to make `go vet` happy, and avoid copying mutexes.
@@ -39,6 +40,14 @@ type batchQueue struct {
 	closeErr error
 }
 
+type Buffer interface {
+	Read(p []interface{}) (n int, err error)
+	Write(p []interface{}) (n int, err error)
+	WriteRoll(p []interface{}) (n int, err error)
+	Buffered() int
+	Discard(dn int) (n int, err error)
+}
+
 var (
 	errClose = errors.New("closed")
 )
@@ -46,7 +55,7 @@ var (
 func NewBatchQueue(initialSize int, opts ...BqOption) *batchQueue {
 	bq := &batchQueue{
 		//queue: make([]interface{}, 0, initialSize),
-		rb:    New(initialSize, WithoutMutex(true)),
+		buf:   New(initialSize, WithoutMutex(true)),
 		mutex: &sync.Mutex{},
 		cond:  &sync.Cond{},
 	}
@@ -68,7 +77,7 @@ func (b *batchQueue) Put(batch ...interface{}) (int, error) {
 		return 0, b.closeErr
 	}
 	//b.queue = append(b.queue, batch)
-	n, _ := b.rb.Write(batch)
+	n, _ := b.buf.Write(batch)
 	return n, nil
 }
 
@@ -82,7 +91,7 @@ func (b *batchQueue) PutRoll(batch ...interface{}) (int, error) {
 		return 0, b.closeErr
 	}
 
-	n, err := b.rb.WriteRoll(batch)
+	n, err := b.buf.WriteRoll(batch)
 	if err == ErrOverCapacity {
 		return n, err
 	}
@@ -108,7 +117,7 @@ func (b *batchQueue) TryGet() (interface{}, error) {
 	if b.closed {
 		return nil, b.closeErr
 	}
-	if b.rb.Buffered() == 0 {
+	if b.buf.Buffered() == 0 {
 		return nil, nil
 	}
 
@@ -132,15 +141,15 @@ func (b *batchQueue) GetWithSize(n int) ([]interface{}, error) {
 
 //drain the ringbuffer and then check if batchQueue is closed
 func (b *batchQueue) getWithSize(n int) ([]interface{}, error) {
-	for b.rb.Buffered() == 0 && !b.closed {
+	for b.buf.Buffered() == 0 && !b.closed {
 		b.cond.Wait()
 	}
 
-	if b.rb.Buffered() == 0 && b.closed {
+	if b.buf.Buffered() == 0 && b.closed {
 		return nil, b.closeErr
 	}
 
-	bufferNum := b.rb.Buffered()
+	bufferNum := b.buf.Buffered()
 	if bufferNum == 0 {
 		panic("bufferNum == 0")
 	}
@@ -148,7 +157,7 @@ func (b *batchQueue) getWithSize(n int) ([]interface{}, error) {
 		n = bufferNum
 	}
 	need := make([]interface{}, n)
-	rn, err := b.rb.Read(need)
+	rn, err := b.buf.Read(need)
 	if len(need) != rn {
 		panic("len(need) != rn")
 	}
