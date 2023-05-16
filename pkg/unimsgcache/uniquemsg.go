@@ -33,7 +33,7 @@ type Msg interface {
 }
 
 func New() *UniMsgCache {
-	return &UniMsgCache{}
+	return &UniMsgCache{event: make(chan struct{}, 1), cache: map[string]UniMsg{}}
 }
 
 func (q *UniMsgCache) Puts(msgs []Msg) error {
