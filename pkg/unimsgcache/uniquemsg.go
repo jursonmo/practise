@@ -36,6 +36,12 @@ func New() *UniMsgCache {
 	return &UniMsgCache{event: make(chan struct{}, 1), cache: map[string]UniMsg{}}
 }
 
+func (q *UniMsgCache) Len() int {
+	q.Lock()
+	defer q.Unlock()
+	return len(q.cache)
+}
+
 func (q *UniMsgCache) Puts(msgs []Msg) error {
 	//todo: check msg.Key() if empty
 	q.Lock()
