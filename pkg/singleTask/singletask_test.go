@@ -10,6 +10,7 @@ import (
 
 var taskCounter int32
 
+//go test -v -test.run TestSingleTask
 func TestSingleTask(t *testing.T) {
 	myTask := func(ctx context.Context) error {
 		new := atomic.AddInt32(&taskCounter, 1)
@@ -119,6 +120,7 @@ func TestCancelTask(t *testing.T) {
 	}
 }
 
+//go test -v -test.run TestPutTaskPromise
 func TestPutTaskPromise(t *testing.T) {
 	var err error
 	ctx, _ := context.WithCancel(context.Background())

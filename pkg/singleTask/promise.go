@@ -63,7 +63,11 @@ func (ms *Promise) Error() error {
 
 func (ms *Promise) Reset(ctx context.Context, backoff backoffx.Backoffer) {
 	ms.ctx = ctx
-	ms.backoff = backoff
+	if backoff != nil {
+		ms.backoff = backoff
+	} else {
+		ms.backoff.Reset()
+	}
 	ms.err = nil
 }
 
