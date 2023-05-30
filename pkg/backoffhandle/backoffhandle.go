@@ -56,6 +56,6 @@ func DelayCtx(ctx context.Context, start time.Time, delayAtLeast time.Duration) 
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, delayAtLeast-cost)
+	defer cancel()
 	<-ctx.Done()
-	cancel()
 }
