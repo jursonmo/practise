@@ -8,6 +8,8 @@ import (
 	"github.com/jursonmo/practise/pkg/backoffx"
 )
 
+// 保证至少间隔一定的时间后再重试,避免过于频繁调用下一个服务
+// 不能用sleep, 因为这样可能间隔的时间超过预想的，handle 处理会花费时间，同时sleep期间无法被唤醒或cancel,
 type BackoffHandle struct {
 	handle       func(context.Context) error
 	resultHandle func(error)
@@ -20,15 +22,11 @@ func NewBackoffHandle(handle func(context.Context) error, backoff backoffx.Backo
 
 func (bh *BackoffHandle) Run(ctx context.Context) error {
 	var start time.Time
-	first := true
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if !first {
-			DelayCtx(ctx, start, bh.backoff.Duration())
-		}
-		first = false
+		start = time.Now()
 		err := bh.handle(ctx)
 		if err == nil {
 			bh.backoff.Reset()
@@ -40,6 +38,8 @@ func (bh *BackoffHandle) Run(ctx context.Context) error {
 		if IsContextErrs(err) {
 			return err
 		}
+		//time.Sleep(bh.backoff.Duration() - time.Since(start)) ??
+		DelayCtx(ctx, start, bh.backoff.Duration()) //如果ctx 已经deadline了，DelayCtx也会快速返回
 	}
 }
 
