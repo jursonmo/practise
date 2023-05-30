@@ -22,6 +22,15 @@ func ContextErrs() []error {
 	return []error{context.Canceled, context.DeadlineExceeded}
 }
 
+func (ms *Promise) IsQuitErr(err error) bool {
+	for _, quitErr := range ms.quitErrs {
+		if errors.Is(err, quitErr) {
+			return true
+		}
+	}
+	return false
+}
+
 var DefPromise = NewPromise(context.Background(), backoffx.DefaultBackoff, ContextErrs())
 
 func NewPromise(ctx context.Context, backoff backoffx.Backoffer, errs []error) *Promise {
@@ -47,11 +56,9 @@ func (ms *Promise) Call(f func(context.Context) error, resultHandlers ...TaskRes
 			return ms
 		}
 
-		for _, quitErr := range ms.quitErrs {
-			if errors.Is(err, quitErr) {
-				ms.err = err
-				return ms
-			}
+		if ms.IsQuitErr(err) {
+			ms.err = err
+			return ms
 		}
 		DelayCtx(ms.ctx, start, ms.backoff.Duration())
 	}
