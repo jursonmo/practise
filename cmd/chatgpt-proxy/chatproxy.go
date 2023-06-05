@@ -77,7 +77,7 @@ completion_tokens 是 ChatGPT 回复的 token 数量，
 total_tokens 是总共使用的 token 数量
 */
 
-var DefaultMaxTokens = 50
+var DefaultMaxTokens = 0      //0 代表不限制, chatgtp 的回答可以更长，如果限制50，回应的内容很短。
 var DefaultRecordMsgs = 3 * 2 //保留三次对话的消息
 var HeaderSize = 2
 
@@ -98,6 +98,9 @@ const (
 	PROXY  = "proxy"
 )
 
+//./cp_linux -m server -l tcp://x.x.x.x:{port1} -k {api-key}
+//./cp_linux -m proxy -l ws://y.y.y.y:{port2} -r tcp://x.x.x.x:{port1}
+//./cp_linux -m client -r tcp://xxx:port  -i true
 var (
 	mode       = flag.String("m", CLIENT, "client: -r tcp://x.x.x.x:{port}, proxy: -l -r, server: -l ")
 	remoteAddr = flag.String("r", "tcp://127.0.0.1:1420", "client/proxy mode, the addr connect to ")
