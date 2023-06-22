@@ -19,6 +19,8 @@ func SetReadDeadline(conn *websocket.Conn, isServer bool, readDeadline time.Dura
 		}
 		return func(s string) error {
 			log.Printf("receive %s from :%v, and SetReadDeadline:%v", msg, conn.RemoteAddr(), readDeadline)
+			//每次收到报文都重置ReadDeadline，如果超过readDeadline 没有收到指定数据，即没有走到这里，就会超时
+			//虽然可以在收到任意报文时重置ReadDeadline，但是这样在大流量的情况下会频繁设置SetReadDeadline，有一定的性能损耗
 			conn.SetReadDeadline(time.Now().Add(readDeadline))
 			if handler != nil {
 				return handler(s)

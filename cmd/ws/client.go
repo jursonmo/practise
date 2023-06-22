@@ -140,7 +140,7 @@ func wsDial(ctx context.Context, socketUrl string) {
 				//正常情况下，发送close 控制信息后，server 会关闭连接，本地收到fin 后, 当前的receiveHandler 会读取错误
 				//本端发送close 控制信息并不会自己主动关闭本地socket
 				//并且close(done), 上面的case <-done:会更早执行,这里就不会被调用到.
-				//如果底层网络是不同的，receiveHandler 感知不到错误，那么就会走到这里。
+				//如果底层网络是不通的，receiveHandler 感知不到错误，那么就会走到这里。
 				log.Println("Timeout in closing receiving channel. Exiting....")
 			}
 			return
@@ -205,6 +205,8 @@ func SetReadDeadline(conn *websocket.Conn, isServer bool, readDeadline time.Dura
 		}
 		return func(s string) error {
 			log.Printf("receive %s from :%v, and SetReadDeadline:%v", msg, conn.RemoteAddr(), readDeadline)
+			//每次收到报文都重置ReadDeadline，如果超过readDeadline 没有收到指定数据，即没有走到这里，就会超时
+			//虽然可以在收到任意报文时重置ReadDeadline，但是这样在大流量的情况下会频繁设置SetReadDeadline，有一定的性能损耗
 			conn.SetReadDeadline(time.Now().Add(readDeadline))
 			if handler != nil {
 				return handler(s)
