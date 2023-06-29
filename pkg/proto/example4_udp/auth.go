@@ -17,6 +17,9 @@ var Password = "123456"
 var authReq = AuthReq{User: UserName, Pwd: Password}
 
 func SetReadDeadline(conn *proto.ProtoConn, isServer bool, readDeadline time.Duration) {
+	//fix:先设置一个deadline, 如果没有收到ping or pong 自动超时, 收到ping or pong 后 会更新deadline
+	conn.SetReadDeadline(time.Now().Add(readDeadline)) //如果这里不设置deadline，可能一直收不到ping,那么永远都无法超时
+
 	wrapHanlder := func(handler func([]byte) error, readDeadline time.Duration) func([]byte) error {
 		msg := "pong"
 		if isServer {
