@@ -64,12 +64,20 @@ func main() {
 	// start middle proxy server
 	middleProxy := goproxy.NewProxyHttpServer()
 	middleProxy.Verbose = true
+	//mo: 如果middleProxy 收到GET 请求，会根据Transport Proxy 把request发送给代理
 	middleProxy.Tr.Proxy = func(req *http.Request) (*url.URL, error) {
 		return url.Parse("http://localhost:8082")
 	}
 	connectReqHandler := func(req *http.Request) {
 		SetBasicAuth(username, password, req)
 	}
+	//mo: 如果是middleProxy 收到CONNECT 请求，会调用ConnectDial 向下一个代理器建立tcp 连接，
+	//然后给client 回应http 200, 同时给下一个代理器发送CONNECT request,
+	// 只不过request HOST 的目的地址依然是target, 这样下一个代理器收到也是CONNECT 请求，然后进行类似的处理。
+	// 下一个代理器如果是end proxy, 那么它不需要设置ConnectDial，这样就用end proxy.Tr.Dial或者net.Dial 跟target 建立tcp 连接
+	// 这样client 跟 target 就建立通道了，可以进行tls 握手
+	// 创建Proxy 时，默认去找环境变量https_proxy 来初始化 ConnectDial，没有环境变量，ConnectDial就为nil
+	// 这里是手动设置ConnectDial，指向end proxy.
 	middleProxy.ConnectDial = middleProxy.NewConnectDialToProxyWithHandler("http://localhost:8082", connectReqHandler)
 	middleProxy.OnRequest().Do(goproxy.FuncReqHandler(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		SetBasicAuth(username, password, req)
