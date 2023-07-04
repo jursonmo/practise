@@ -67,7 +67,7 @@ type DialConfig struct {
 	KeepAlive      time.Duration //onlg change keepaliveIntvl, keepaliveIDEL, don't change keepaliveCnt(probes)
 	TcpUserTimeout time.Duration //for linux: use socket option: tcp_user_timeout
 	BackOff        backoffx.Backoffer
-	MaxDial        int64
+	MaxDial        int64 //max dial times, default MaxInt64, but use ctx to control dial is better way
 	DialFailFunc   func(error)
 	//Dial(network, address string) (net.Conn, error)
 }
