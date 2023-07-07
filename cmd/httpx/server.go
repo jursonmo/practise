@@ -13,6 +13,7 @@ import (
 func main() {
 	http.HandleFunc("/sleep", handler2)
 	http.HandleFunc("/nosleep", handler3)
+	http.HandleFunc("/echo", echo)
 	err := http.ListenAndServe(":1313", nil)
 	fmt.Println(err)
 	return
@@ -23,6 +24,11 @@ type reqData struct {
 }
 
 var sleep = 20
+
+func echo(w http.ResponseWriter, req *http.Request) {
+	fmt.Printf("echo handler, method:%s, url:%v\n", req.Method, req.URL)
+	w.Write([]byte("echo"))
+}
 
 func handler2(w http.ResponseWriter, req *http.Request) {
 	tmp := sleep
