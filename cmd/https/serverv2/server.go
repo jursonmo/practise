@@ -21,8 +21,6 @@ type Config struct {
 
 type server struct {
 	address    string
-	tgPath     string
-	auth       map[string]string
 	tlsEnable  bool
 	certFile   string
 	keyFile    string
