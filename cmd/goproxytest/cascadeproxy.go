@@ -94,6 +94,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("new request failed:%v", err)
 	}
+	//用Transport Proxy 的方式，
+	//如果target 是 http, 那么就向代理器发起GET 请求，
+	//如果target 是https, 就向代理器发起CONNECT 请求
 	tr := &http.Transport{Proxy: func(req *http.Request) (*url.URL, error) { return url.Parse(proxyUrl) }}
 	client := &http.Client{Transport: tr}
 	rsp, err := client.Do(request)
