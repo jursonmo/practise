@@ -97,6 +97,8 @@ func main() {
 	//用Transport Proxy 的方式，
 	//如果target 是 http, 那么就向代理器发起GET 请求，
 	//如果target 是https, 就向代理器发起CONNECT 请求
+	//其实也很好理解，因为target 是https 的话，需要跟target 进行tls 握手，所以代理器只是起到中转tcp连接的数据即可
+	//如果target 是 http, 不需要跟target进行tls 协商，也就是代理器可以直接代理请求，即代理器向target 发起http request
 	tr := &http.Transport{Proxy: func(req *http.Request) (*url.URL, error) { return url.Parse(proxyUrl) }}
 	client := &http.Client{Transport: tr}
 	rsp, err := client.Do(request)
