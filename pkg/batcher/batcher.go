@@ -21,7 +21,9 @@ type options struct {
 	interval time.Duration
 }
 
-func (o options) check() {
+//fixbug: 要用对象指针
+//func (o options) check() {
+func (o *options) check() {
 	if o.size <= 0 {
 		o.size = 100
 	}
@@ -169,7 +171,7 @@ func (b *Batcher) merge(idx int, ch <-chan *msg) {
 		}
 		if len(vals) > 0 {
 			ctx := context.Background()
-			b.Do(ctx, vals)
+			b.Do(ctx, vals) // 不用管处理是否失败吗？
 			vals = make(map[string][]interface{}, b.opts.size)
 			count = 0
 		}
@@ -182,7 +184,7 @@ func (b *Batcher) merge(idx int, ch <-chan *msg) {
 
 func (b *Batcher) Close() {
 	for _, ch := range b.chans {
-		ch <- nil
+		ch <- nil // 通过发送nil 来终止任务， 而不是close(ch), 避免向ch 写数据panic
 	}
 	b.wait.Wait()
 }
