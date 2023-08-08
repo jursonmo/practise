@@ -10,6 +10,8 @@ import (
 
 type dedupeWorker struct{}
 
+var _ Exector = (*dedupeWorker)(nil)
+
 func (w *dedupeWorker) Do(ctx context.Context, valsMap map[string][]interface{}) error {
 	for key, vals := range valsMap {
 		if len(vals) > 1 {
@@ -23,7 +25,7 @@ func (w *dedupeWorker) Do(ctx context.Context, valsMap map[string][]interface{})
 func TestPutGet(t *testing.T) {
 	worker := &dedupeWorker{}
 	batcher := New(worker, WithDedupe(true), WithInterval(time.Second))
-	batcher.Start()
+	batcher.Start(context.Background())
 	t.Logf("batcher:%v", batcher)
 
 	wg := &sync.WaitGroup{}
@@ -44,4 +46,5 @@ func TestPutGet(t *testing.T) {
 	if err1 == nil {
 		t.Fatal("expect add value1 return err of overwrited ")
 	}
+	t.Logf("err1:%v", err1)
 }

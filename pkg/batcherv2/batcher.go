@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-faster/city"
@@ -23,6 +24,7 @@ type Hasher interface {
 }
 
 var ErrFull = errors.New("channel is full")
+var ErrClosed = errors.New("batcher is closed")
 
 type Option interface {
 	apply(*options)
@@ -143,6 +145,7 @@ func (m *Msg) Complete(err error) {
 		close(m.done)
 	}
 }
+
 func (m *Msg) Release() {
 	//todo: reset and put back sync.Pool
 }
@@ -152,6 +155,10 @@ type Exector interface {
 }
 
 type Batcher struct {
+	closed int32
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	opts options
 
 	exector  Exector
@@ -173,12 +180,14 @@ func New(e Exector, opts ...Option) *Batcher {
 	}
 	return b
 }
+
 func (b *Batcher) String() string {
 	o := b.opts
 	return fmt.Sprintf("size:%d, buffer:%d, worker:%d, intvl:%v, dedupe:%v", o.size, o.buffer, o.worker, o.interval, o.dedupe)
 }
 
-func (b *Batcher) Start() {
+func (b *Batcher) Start(ctx context.Context) {
+	b.ctx, b.cancel = context.WithCancel(ctx)
 	if b.exector == nil {
 		log.Fatal("Batcher: Do func is nil")
 	}
@@ -192,6 +201,9 @@ func (b *Batcher) Start() {
 }
 
 func (b *Batcher) Addx(key string, val interface{}, sync bool) error {
+	if atomic.LoadInt32(&b.closed) == 1 {
+		return ErrClosed
+	}
 	ch, msg := b.add(key, val, sync)
 	select {
 	case ch <- msg:
@@ -225,19 +237,17 @@ func (b *Batcher) add(key string, val interface{}, sync bool) (chan *Msg, *Msg) 
 
 func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 	defer b.wait.Done()
-
 	var (
-		m          *Msg
-		count      int
-		closed     bool
-		lastTicker = true
-		interval   = b.opts.interval
-		msgs       = make(map[string][]*Msg, b.opts.size)
+		m        *Msg
+		count    int
+		closed   bool
+		interval = b.opts.interval
+		msgs     = make(map[string][]*Msg, b.opts.size)
 	)
-	if idx > 0 {
-		interval = time.Duration(int64(idx) * (int64(b.opts.interval) / int64(b.opts.worker)))
-	}
+
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case m = <-ch:
@@ -245,30 +255,28 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 				closed = true
 				break
 			}
-			count++
+
 			if b.opts.dedupe {
 				//去重，把之前的消息剔除
 				if oldMsgs, ok := msgs[m.key]; ok {
-					oldMsgs[0].Complete(ErrOverWrited)
 					delete(msgs, m.key)
+					oldMsgs[0].Complete(ErrOverWrited)
+					count--
 				}
 			}
 			msgs[m.key] = append(msgs[m.key], m)
+			count++
 
 			if count >= b.opts.size {
 				break
 			}
 			continue
 		case <-ticker.C:
-			if lastTicker {
-				ticker.Stop()
-				ticker = time.NewTicker(b.opts.interval)
-				lastTicker = false
-			}
+			//todo: log
+			//其实这种固定每隔一定时间就处理消息不是特别合理的，应该是有数据缓存时开始计时，到期再处理消息。
 		}
-		if len(msgs) > 0 {
-			ctx := context.Background()
 
+		if len(msgs) > 0 {
 			//把msg 转成 map[string][]interface{}
 			data := make(map[string][]interface{})
 			for key, msgx := range msgs {
@@ -276,7 +284,7 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 					data[key] = append(data[key], msg.Value())
 				}
 			}
-			err := b.exector.Do(ctx, data) // 不用管处理是否失败吗？
+			err := b.exector.Do(b.ctx, data) // 不用管处理是否失败吗？
 			//反馈处理结果
 			for _, msgx := range msgs {
 				for _, msg := range msgx {
@@ -287,15 +295,41 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 			count = 0
 		}
 		if closed {
-			ticker.Stop()
 			return
 		}
 	}
 }
 
 func (b *Batcher) Close() {
+	atomic.StoreInt32(&b.closed, 1) //避免channel加入新的消息，
+	//然后向channel 发送nil, 通知merge任务不再等待channel 的消息，立即处理已经缓存的数据，处理完，merge 任务返回。
 	for _, ch := range b.chans {
 		ch <- nil // 通过发送nil 来终止任务， 而不是close(ch), 避免向ch 写数据panic
 	}
-	b.wait.Wait()
+	b.wait.Wait() //等待merge 任务返回。
+	b.clear()     //清除遗留的缓存消息，避免应用层永远阻塞等待消息处理结果
+}
+
+func (b *Batcher) Stop() error {
+	if b.cancel != nil {
+		b.cancel() //cancel batcher Do handler
+	}
+	b.Close() //cancel batcher merge handler
+	return nil
+}
+
+//为了确保ch 的数据都处理完，这里再次做一次清理工作, 避免应用层永远阻塞等待消息处理结果
+func (b *Batcher) clear() {
+	for _, ch := range b.chans {
+		for {
+			select {
+			case m := <-ch:
+				if m != nil {
+					m.Complete(ErrClosed)
+				}
+			default:
+				return
+			}
+		}
+	}
 }
