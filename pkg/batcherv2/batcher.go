@@ -245,9 +245,9 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 		msgs     = make(map[string][]*Msg, b.opts.size)
 	)
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
+	//ticker := time.NewTicker(interval)
+	//defer ticker.Stop()
+	timer := &time.Timer{}
 	for {
 		select {
 		case m = <-ch:
@@ -255,7 +255,10 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 				closed = true
 				break
 			}
-
+			if len(msgs) == 0 {
+				//给msgs添加第一个消息时，才启动timer
+				timer = time.NewTimer(interval)
+			}
 			if b.opts.dedupe {
 				//去重，把之前的消息剔除
 				if oldMsgs, ok := msgs[m.key]; ok {
@@ -271,9 +274,19 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 				break
 			}
 			continue
-		case <-ticker.C:
-			//todo: log
+		case <-timer.C: //如果time.C == nil, 就是永远阻塞
 			//其实这种固定每隔一定时间就处理消息不是特别合理的，应该是有数据缓存时开始计时，到期再处理消息。
+			//所以给msgs添加第一个消息时，启动timer
+		}
+
+		if timer.C != nil {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.C = nil
 		}
 
 		if len(msgs) > 0 {
@@ -291,6 +304,7 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 					msg.Complete(err)
 				}
 			}
+			//重置消息记录
 			msgs = make(map[string][]*Msg, b.opts.size)
 			count = 0
 		}
@@ -300,6 +314,51 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 	}
 }
 
+/*
+type BatcherTask struct {
+	// ctx     context.Context
+	// intvl   time.Duration
+	batcher *Batcher
+	ready   chan struct{}
+}
+
+func NewBatcherTask(b *Batcher) *BatcherTask {
+	return &BatcherTask{batcher: b, ready: make(chan struct{}, 1)}
+}
+
+func (b *Batcher) newBatcherTask(msgs map[string][]*Msg) {
+	t := time.NewTimer(b.opts.interval)
+	bt := NewBatcherTask(b)
+	go func() {
+	loop:
+		for {
+			select {
+			case <-t.C:
+				break loop
+			case <-bt.ready:
+				break loop
+			}
+		}
+		if len(msgs) > 0 {
+			//把msg 转成 map[string][]interface{}
+			data := make(map[string][]interface{})
+			for key, msgx := range msgs {
+				for _, msg := range msgx {
+					data[key] = append(data[key], msg.Value())
+				}
+			}
+			err := b.exector.Do(b.ctx, data) // 不用管处理是否失败吗？
+			//反馈处理结果
+			for _, msgx := range msgs {
+				for _, msg := range msgx {
+					msg.Complete(err)
+				}
+			}
+			msgs = make(map[string][]*Msg, b.opts.size)
+		}
+	}()
+}
+*/
 func (b *Batcher) Close() {
 	atomic.StoreInt32(&b.closed, 1) //避免channel加入新的消息，
 	//然后向channel 发送nil, 通知merge任务不再等待channel 的消息，立即处理已经缓存的数据，处理完，merge 任务返回。

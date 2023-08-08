@@ -28,6 +28,8 @@ func TestPutGet(t *testing.T) {
 	batcher.Start(context.Background())
 	t.Logf("batcher:%v", batcher)
 
+	time.Sleep(time.Millisecond * 500) //这样测试的时间应该在1.5s 左右
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	var err1 error
