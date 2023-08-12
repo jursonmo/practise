@@ -1,0 +1,3 @@
+2023/07/04 16:12:00 [INFO]client.go:172: [START] Zinx Client LocalAddr: 127.0.0.1:55933, RemoteAddr: 127.0.0.1:8999
+2023/07/04 16:12:00 [INFO]connection.go:501: ZINX CallOnConnStart....
+2023/07/04 16:12:00 [INFO]connection.go:199: [Reader Goroutine is running]
