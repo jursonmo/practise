@@ -51,6 +51,7 @@ const (
 	InitCmd  = 1 //init Connect
 	CloseCmd = 2
 	Trace    = 3
+	UnFin    = 4 //表示这个报文不是最后一个报文，后面还有
 
 	//PkgType: packag Message type
 	Msg        = 0
@@ -67,6 +68,7 @@ const (
 	//payload Type, 0 mean raw Binary
 	RawBinary      = 0
 	JSON           = 1
+	PROTOBUF       = 2
 	MaxPayloadType = 15
 )
 
@@ -103,13 +105,17 @@ var PayloadTypeNameMap = map[byte]string{
 }
 
 func GetPayloadTypeByName(name string) byte {
-	v, _ := PayloadNameTypeMap[name]
+	v := PayloadNameTypeMap[name]
 	return v
 }
 
 func GetPayloadTypeName(b byte) string {
-	v, _ := PayloadTypeNameMap[b]
+	v := PayloadTypeNameMap[b]
 	return v
+}
+
+func NewPkg() *ProtoPkg {
+	return NewProtoPkg()
 }
 
 func NewProtoPkg() *ProtoPkg {
