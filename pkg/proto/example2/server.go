@@ -26,11 +26,11 @@ func main() {
 			fmt.Println("ERROR", err)
 			continue
 		}
-		msgHandler := func(pc *proto.ProtoConn, d []byte) error {
+		msgHandler := func(pc *proto.ProtoConn, d []byte, t byte) error {
 			fmt.Printf("receive msg:%s\n", string(d))
 			return nil
 		}
-		pconn := proto.NewProtoConn(conn, true, msgHandler, proto.WithHandShakeData(genHandshakeData))
+		pconn := proto.NewProtoConn(conn, true, proto.ProtoMsgHandle(msgHandler), proto.WithHandShakeData(genHandshakeData))
 		go func() {
 			err = pconn.Handshake(context.Background())
 			if err != nil {
