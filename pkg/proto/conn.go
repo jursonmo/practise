@@ -26,17 +26,18 @@ type ProtoConn struct {
 	//
 	handshaker    func(ctx context.Context, conn net.Conn) error
 	handshakeData func() []byte
-	msgHandler    func(pc *ProtoConn, d []byte) error
+	msgHandler    ProtoMsgHandle
 	pingHandler   func(d []byte) error //invoked when receive ping
 	pongHandler   func(d []byte) error //invoked when receive pong
 
 	authReqData func() []byte                 // for client conn, if not nil, means need to send auth request data
 	authHandler func(d []byte) ([]byte, bool) //for server conn: it will be invoked when receive request data
 }
+type ProtoMsgHandle func(pc *ProtoConn, d []byte, t byte) error
 
 var defaultReadBufferSize int = 32 * 1024
 
-func NewProtoConn(c net.Conn, isServer bool, msgHandler func(pc *ProtoConn, data []byte) error, opts ...ProtoConnOpt) *ProtoConn {
+func NewProtoConn(c net.Conn, isServer bool, msgHandler ProtoMsgHandle, opts ...ProtoConnOpt) *ProtoConn {
 	pc := &ProtoConn{conn: c, isServer: isServer, ReadBufferSize: defaultReadBufferSize}
 	pc.r = bufio.NewReaderSize(pc.conn, pc.ReadBufferSize)
 	pc.msgHandler = msgHandler
@@ -130,7 +131,7 @@ func DefaultHandShake(ctx context.Context, conn net.Conn) error {
 	return err
 }
 
-func (pc *ProtoConn) SetUserMsgHandler(h func(pc *ProtoConn, data []byte) error) {
+func (pc *ProtoConn) SetUserMsgHandler(h ProtoMsgHandle) {
 	pc.msgHandler = h
 }
 
@@ -402,7 +403,7 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 			if pc.msgHandler == nil {
 				continue
 			}
-			err = pc.msgHandler(pc, pkg.Payload)
+			err = pc.msgHandler(pc, pkg.Payload, byte(pkg.PayloadType()))
 			if err != nil {
 				return fmt.Errorf("msgHandler err:%w", err)
 			}
@@ -439,4 +440,18 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (pc *ProtoConn) Start(ctx context.Context) error {
+	//init:
+	err := pc.Handshake(ctx)
+	if err != nil {
+		return err
+	}
+	//auth:
+	err = pc.Auth(ctx)
+	if err != nil {
+		return err
+	}
+	return pc.Run(ctx)
 }

@@ -29,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	pconn := proto.NewProtoConn(conn, false, msgHandler, proto.WithHandShakeData(genHandshakeData))
+	pconn := proto.NewProtoConn(conn, false, proto.ProtoMsgHandle(msgHandler), proto.WithHandShakeData(genHandshakeData))
 	//init:
 	err = pconn.Handshake(context.Background())
 	if err != nil {
@@ -54,7 +54,7 @@ func main() {
 	}
 }
 
-func msgHandler(pc *proto.ProtoConn, d []byte) error {
+func msgHandler(pc *proto.ProtoConn, d []byte, t byte) error {
 	fmt.Printf("receive msg:%s", string(d))
 	return nil
 }

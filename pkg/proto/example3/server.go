@@ -33,7 +33,7 @@ func main() {
 
 func handleConn(conn net.Conn) {
 	//echo
-	msgHandler := func(pc *proto.ProtoConn, d []byte) error {
+	msgHandler := func(pc *proto.ProtoConn, d []byte, t byte) error {
 		fmt.Printf("receive from %v msg:%s\n", pc, string(d))
 		_, err := pc.Write(d)
 		if err != nil {
@@ -43,7 +43,7 @@ func handleConn(conn net.Conn) {
 		return nil
 	}
 	//设置proto.WithAuthHandler后，默认authOk == false, 即不允许收发用户数据， 表示需要验证通过后才行收发用户数据
-	pconn := proto.NewProtoConn(conn, true, msgHandler,
+	pconn := proto.NewProtoConn(conn, true, proto.ProtoMsgHandle(msgHandler),
 		proto.WithHandShakeData(genHandshakeData), proto.WithAuthHandler(auth))
 
 	ctx := context.Background()
