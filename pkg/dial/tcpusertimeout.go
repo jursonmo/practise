@@ -1,3 +1,4 @@
+//go:build !linux
 // +build !linux
 
 package dial
@@ -7,6 +8,6 @@ import (
 	"time"
 )
 
-func TcpUserTimeoutControl(t time.Duration) func(network, address string, c syscall.RawConn) error {
+func TcpUserTimeoutControl(t time.Duration, fs ...func(network, address string, c syscall.RawConn) error) func(network, address string, c syscall.RawConn) error {
 	return nil
 }

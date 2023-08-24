@@ -108,7 +108,9 @@ func (s *Server) Stop() error {
 		s.cancel()
 	}
 	for _, ln := range s.lns {
-		ln.Close()
+		if ln != nil {
+			ln.Close()
+		}
 	}
 	return nil
 }
@@ -167,7 +169,8 @@ func (s *Server) Start(ctx context.Context) error {
 func NewListener(ctx context.Context, network, laddr string, keepalive, userTimeout time.Duration) (net.Listener, error) {
 	var lc net.ListenConfig
 	lc.KeepAlive = keepalive
-	lc.Control = TcpUserTimeoutControl(userTimeout)
+	//lc.Control 是一个函数指针，想对fd设置多个属性，那就wrap 包装下
+	lc.Control = TcpUserTimeoutControl(userTimeout, ReuseportControl())
 	l, err := lc.Listen(ctx, network, laddr)
 	if err != nil {
 		return nil, err
