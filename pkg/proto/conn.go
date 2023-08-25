@@ -131,7 +131,7 @@ func DefaultHandShake(ctx context.Context, conn net.Conn) error {
 	return err
 }
 
-func (pc *ProtoConn) SetUserMsgHandler(h ProtoMsgHandle) {
+func (pc *ProtoConn) SetMsgHandler(h ProtoMsgHandle) {
 	pc.msgHandler = h
 }
 
@@ -442,8 +442,9 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 	}
 }
 
-func (pc *ProtoConn) Start(ctx context.Context) error {
-	//init:
+//初始化，握手或者验证，或者两个都做，
+func (pc *ProtoConn) Init(ctx context.Context) error {
+	//是否配置handshaker 或者 handshakeData
 	err := pc.Handshake(ctx)
 	if err != nil {
 		return err
@@ -453,5 +454,5 @@ func (pc *ProtoConn) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return pc.Run(ctx)
+	return nil
 }
