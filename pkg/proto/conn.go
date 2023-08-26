@@ -54,6 +54,9 @@ func NewProtoConn(c net.Conn, isServer bool, msgHandler ProtoMsgHandle, opts ...
 func (pc *ProtoConn) String() string {
 	return fmt.Sprintf("%v<->%v", pc.LocalAddr(), pc.RemoteAddr())
 }
+func (pc *ProtoConn) Conn() net.Conn {
+	return pc.conn
+}
 func (pc *ProtoConn) LocalAddr() net.Addr {
 	return pc.conn.LocalAddr()
 }
@@ -384,7 +387,7 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 
 	var err error
 	defer func() {
-		log.Printf("Run task quit, err:%v", err)
+		log.Printf("ProtoConn Run task quit, err:%v", err)
 	}()
 
 	for {
@@ -397,10 +400,11 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 		switch t {
 		case Msg:
 			if !pc.authOk {
-				fmt.Printf("haven't auth ok")
+				log.Printf("haven't auth ok")
 				continue
 			}
 			if pc.msgHandler == nil {
+				log.Printf("haven't set raw msg Handler ?")
 				continue
 			}
 			err = pc.msgHandler(pc, pkg.Payload, byte(pkg.PayloadType()))
