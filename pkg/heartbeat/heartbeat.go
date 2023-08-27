@@ -17,6 +17,13 @@ import (
 // TCP_KEEPIDLE                                = 0x4
 // TCP_KEEPINTVL                               = 0x5
 
+var Heartbeater interface {
+	Done() <-chan time.Time
+	Beatting() error
+}
+
+var DefautConfig = Config{Intvl: time.Second * 5, IntvlOnFail: time.Second * 2, Probes: 3}
+
 type Config struct {
 	Intvl       time.Duration //
 	IntvlOnFail time.Duration
@@ -32,6 +39,8 @@ type HbPkg struct {
 type Heartbeat struct {
 	ctx context.Context
 
+	name     string
+	lastTime time.Duration //上次收到心跳回应的时间点
 	ttl      time.Duration
 	respChan chan HbPkg
 	startSeq uint32
@@ -39,21 +48,21 @@ type Heartbeat struct {
 	failCnt  int
 	err      error
 
-	requestHandler func(req HbPkg) error
-	onSuccess      func(ttl time.Duration)
-	onFail         func()
+	send      func(req HbPkg) error
+	onSuccess func(name string, ttl time.Duration)  //
+	onTimeout func(name string, dead time.Duration) //dead 表示死了多久，即多久没有收到心跳
 
 	Config
 }
 type HbOption func(*Heartbeat)
 
-func WithFailHandler(f func()) HbOption {
+func WithOnTimout(f func(string, time.Duration)) HbOption {
 	return func(h *Heartbeat) {
-		h.onFail = f
+		h.onTimeout = f
 	}
 }
 
-func WithSuccessHandler(f func(time.Duration)) HbOption {
+func WithSuccessHandler(f func(string, time.Duration)) HbOption {
 	return func(h *Heartbeat) {
 		h.onSuccess = f
 	}
@@ -65,11 +74,11 @@ func WithStartSeq(start uint32) HbOption {
 	}
 }
 
-func NewHeartbeart(c Config, sendRequest func(req HbPkg) error, opts ...HbOption) *Heartbeat {
+func NewHeartbeat(name string, c Config, sendRequest func(HbPkg) error, opts ...HbOption) *Heartbeat {
 	if sendRequest == nil {
 		return nil
 	}
-	hb := &Heartbeat{Config: c, requestHandler: sendRequest, respChan: make(chan HbPkg, 2)}
+	hb := &Heartbeat{name: name, Config: c, send: sendRequest, respChan: make(chan HbPkg, 2)}
 	hb.startSeq = rand.Uint32()
 	for _, opt := range opts {
 		opt(hb)
@@ -79,7 +88,7 @@ func NewHeartbeart(c Config, sendRequest func(req HbPkg) error, opts ...HbOption
 	return hb
 }
 
-func (hb *Heartbeat) RecvResp(p HbPkg) {
+func (hb *Heartbeat) PutResponse(p HbPkg) {
 	select {
 	case hb.respChan <- p:
 	default:
@@ -116,43 +125,45 @@ func (t *timerx) Done() <-chan time.Time {
 //1. NewHeartbeart(config), with OnFail, with OnSuccess
 //2. hb.RecvResp() -->channel
 //3. hb.Run --> recvResp, call OnSuccess if recvRespon succesfully, call OnFail
-func (hb *Heartbeat) Run() error {
+func (hb *Heartbeat) Start(ctx context.Context) error {
 	if hb.err != nil {
 		return hb.err
 	}
-
+	hb.ctx = ctx
 	timer := NewTimerx(hb.Intvl)
 	defer timer.Stop()
 
 	for {
 		//always check ctx first
+		if err := hb.ctx.Err(); err != nil {
+			hb.err = err
+			return hb.err
+		}
+
 		select {
 		case <-hb.ctx.Done():
 			hb.err = hb.ctx.Err()
 			return hb.err
-		default:
-		}
-
-		select {
 		case p := <-hb.respChan:
 			if p.Seq != hb.onFlyReq.Seq {
 				continue
 			}
-			hb.ttl = timex.Since(p.Ts)
-			if hb.onSuccess != nil {
-				hb.onSuccess(hb.ttl)
-			}
 			//ok, reset
 			hb.failCnt = 0
-			timer.Reset(hb.Intvl)
-
+			hb.lastTime = timex.Now() //记录收到心跳回应的时间
+			timer.Reset(hb.Intvl)     //确保定时器重置
+			hb.ttl = timex.Since(p.Ts)
+			if hb.onSuccess != nil {
+				hb.onSuccess(hb.name, hb.ttl)
+			}
 		case <-timer.Done():
-			if err := hb.timeout(); err != nil {
+			//这里表示心跳超时
+			if err := hb.checkTimeout(); err != nil {
 				return err
 			}
 			hb.onFlyReq.Seq++
 			hb.onFlyReq.Ts = timex.Now()
-			err := hb.requestHandler(hb.onFlyReq)
+			err := hb.send(hb.onFlyReq)
 			if err != nil {
 				log.Println(err)
 			}
@@ -166,7 +177,7 @@ func (hb *Heartbeat) IsFail() bool {
 }
 
 //handle timeout case
-func (hb *Heartbeat) timeout() error {
+func (hb *Heartbeat) checkTimeout() error {
 	if hb.err != nil {
 		return hb.err
 	}
@@ -178,8 +189,8 @@ func (hb *Heartbeat) timeout() error {
 
 	//fail
 	hb.err = fmt.Errorf("heartbeat stop, timeout cnt:%d", hb.failCnt)
-	if hb.onFail != nil {
-		hb.onFail()
+	if hb.onTimeout != nil {
+		hb.onTimeout(hb.name, timex.Since(hb.lastTime))
 	}
 	return hb.err
 }
