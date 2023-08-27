@@ -38,9 +38,8 @@ type Client struct {
 	onConnect  func(session.Sessioner)
 	onStop     func(string)
 
-	pc       *proto.ProtoConn
-	routerMu sync.RWMutex
-	routers  *session.RouterRegister
+	pc      *proto.ProtoConn
+	routers *session.RouterRegister
 	// isServer bool
 	// authOk   bool
 
