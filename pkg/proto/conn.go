@@ -213,6 +213,7 @@ func (pc *ProtoConn) WriteCloseMsg(code int, msg string) (int, error) {
 
 var ErrUnauth = errors.New("unauth")
 
+//实际上是发送 Msg 类型的数据
 //发送用户数据前，检查auth 是否ok
 func (pc *ProtoConn) Write(d []byte) (int, error) {
 	if !pc.authOk {
@@ -415,6 +416,7 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 			if pc.pingHandler == nil {
 				continue
 			}
+			//默认是echo, 即回应pong,数据是原来的数据
 			err = pc.pingHandler(pkg.Payload)
 			if err != nil {
 				return fmt.Errorf("pingHandler err:%w", err)
