@@ -54,12 +54,12 @@ func dialFail(err error) {
 func connectHandle(s session.Sessioner) {
 	go func() {
 		for {
-			err := s.WriteMsg(11, []byte("msg1"))
+			err := s.WriteMsg(11, []byte("msg11"))
 			if err != nil {
 				log.Println(err)
 				return
 			}
-			log.Println("send id 1 msg ok")
+			log.Println("send id 11 msg ok")
 			time.Sleep(time.Second * 2)
 		}
 	}()

@@ -46,10 +46,10 @@ func msg11Handle(s session.Sessioner, msgid uint16, d []byte) {
 	log.Printf("session:%v->%v, receive msgid:%d, msg:%v", conn.LocalAddr(), conn.RemoteAddr(), msgid, string(d))
 
 	//send msgid=12 msg
-	err := s.WriteMsg(12, []byte("msg2"))
+	err := s.WriteMsg(12, []byte("msg12"))
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	log.Println("send msg2 ok")
+	log.Println("send msg12 ok")
 }
