@@ -29,6 +29,8 @@ type Session struct {
 func NewSession(s *Server, pc *proto.ProtoConn) *Session {
 	ss := &Session{srv: s, pc: pc, name: "a session from server", routers: session.NewRouterRegister()}
 	pc.SetMsgHandler(proto.ProtoMsgHandle(ss.msgHandle))
+	//设置了SetMsgHandlerv2, 上面设置的SetMsgHandler 就不起作用了
+	pc.SetMsgHandlerv2(proto.ProtoMsgHandlev2(ss.msgHandlev2))
 	return ss
 }
 
@@ -65,6 +67,28 @@ func (s *Session) msgHandle(pc *proto.ProtoConn, d []byte, t byte) error {
 	return nil
 }
 
+func (s *Session) msgHandlev2(pc *proto.ProtoConn, pkg proto.Pkger) error {
+	msgid, ok := pkg.MsgId()
+	if !ok {
+		log.Println("session msgHandlev2 can't get msgid")
+		return nil
+	}
+	//log.Printf("session get msgid:%d", msgid)
+	//主要是 session 内部注册的私有数据处理，比如心跳处理
+	if r := s.GetRouter(msgid); r != nil {
+		r.Handle(s, msgid, pkg.Paylaod())
+		return nil
+	}
+
+	//用户注册的msg router
+	r := s.srv.GetRouter(msgid)
+	if r == nil {
+		return nil
+	}
+	r.Handle(s, msgid, pkg.Paylaod())
+	return nil
+}
+
 func (s *Session) Start(ctx context.Context) error {
 	var egctx context.Context
 	s.eg, egctx = errgroup.WithContext(ctx) //要用c.ctx, 这样c.cancel 才能 取消egctx
@@ -77,6 +101,7 @@ func (s *Session) Start(ctx context.Context) error {
 	//注册heartbeat 处理请求回调，默认就是回应原始数据,类型是HeartBeatRespId
 	s.addRouter(uint16(session.HeartBeatReqId),
 		session.HandleFunc(func(s session.Sessioner, msgid uint16, d []byte) {
+			log.Printf("receive hb request:%s", string(d))
 			err := s.WriteMsg(session.HeartBeatRespId, d)
 			if err != nil {
 				log.Println(err)
@@ -86,14 +111,15 @@ func (s *Session) Start(ctx context.Context) error {
 	//发送心跳
 	hbsend := func(req heartbeat.HbPkg) error {
 		buf := bytes.NewBuffer(make([]byte, 0, 128))
-		binary.Write(buf, binary.BigEndian, uint16(session.HeartBeatReqId))
+		//binary.Write(buf, binary.BigEndian, uint16(session.HeartBeatReqId))
 		encoder := json.NewEncoder(buf)
 		err := encoder.Encode(&req)
 		if err != nil {
 			return err
 		}
-		log.Printf("send heartbeat req seq:%d\n", req.Seq)
-		_, err = s.pc.Write(buf.Bytes())
+		log.Printf("send heartbeat req:%+v\n", req)
+		//_, err = s.pc.Write(buf.Bytes())
+		_, err = s.pc.WriteWithId(session.HeartBeatReqId, buf.Bytes())
 		return err
 	}
 
@@ -105,7 +131,7 @@ func (s *Session) Start(ctx context.Context) error {
 		hb := heartbeat.HbPkg{}
 		err := json.Unmarshal(d, &hb)
 		if err != nil {
-			log.Println(err)
+			log.Println("handle hb response err:", err)
 			return
 		}
 		log.Printf("receive hb response:%+v\n", hb)
@@ -130,13 +156,20 @@ func (s *Session) SessionID() string {
 }
 
 func (s *Session) WriteMsg(msgid uint16, d []byte) error {
-	buf := make([]byte, len(d)+2)
-	binary.BigEndian.PutUint16(buf, msgid)
-	copy(buf[2:], d)
-	_, err := s.pc.Write(buf)
-	return err
+	// 这里需要make 一个大的内存对象，还需要copy一次
+	// buf := make([]byte, len(d)+2)
+	// binary.BigEndian.PutUint16(buf, msgid)
+	// copy(buf[2:], d)
+	// _, err := s.pc.Write(buf)
+	// return err
+
+	return s.WriteMsgv2(msgid, d)
 }
 
+func (s *Session) WriteMsgv2(msgid uint16, d []byte) error {
+	_, err := s.pc.WriteWithId(msgid, d)
+	return err
+}
 func (s *Session) Stop() {
 	log.Printf("session:%v, stopping...", s)
 	if s.srv.onStop != nil {

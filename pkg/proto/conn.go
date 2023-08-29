@@ -3,6 +3,7 @@ package proto
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,13 +28,36 @@ type ProtoConn struct {
 	handshaker    func(ctx context.Context, conn net.Conn) error
 	handshakeData func() []byte
 	msgHandler    ProtoMsgHandle
+	msgHandlerv2  ProtoMsgHandlev2
 	pingHandler   func(d []byte) error //invoked when receive ping
 	pongHandler   func(d []byte) error //invoked when receive pong
 
 	authReqData func() []byte                 // for client conn, if not nil, means need to send auth request data
 	authHandler func(d []byte) ([]byte, bool) //for server conn: it will be invoked when receive request data
 }
+
 type ProtoMsgHandle func(pc *ProtoConn, d []byte, t byte) error
+type ProtoMsgHandlev2 func(pc *ProtoConn, pkg Pkger) error
+type Pkger interface {
+	Paylaod() []byte
+	Type() byte //payload type
+	MsgId() (uint16, bool)
+}
+
+func (pkg *ProtoPkg) Paylaod() []byte {
+	return pkg.Payload
+}
+func (pkg *ProtoPkg) Type() byte {
+	return byte(pkg.PayloadType())
+}
+func (pkg *ProtoPkg) MsgId() (uint16, bool) {
+	for _, opt := range pkg.options {
+		if opt.T == MsgIdOpt {
+			return binary.BigEndian.Uint16(opt.V), true
+		}
+	}
+	return 0, false
+}
 
 var defaultReadBufferSize int = 32 * 1024
 
@@ -138,6 +162,10 @@ func (pc *ProtoConn) SetMsgHandler(h ProtoMsgHandle) {
 	pc.msgHandler = h
 }
 
+func (pc *ProtoConn) SetMsgHandlerv2(h ProtoMsgHandlev2) {
+	pc.msgHandlerv2 = h
+}
+
 func (pc *ProtoConn) PingHandler() func(data []byte) error {
 	return pc.pingHandler
 }
@@ -220,6 +248,18 @@ func (pc *ProtoConn) Write(d []byte) (int, error) {
 		return 0, ErrUnauth
 	}
 	pkg, err := EncodePkg(d, Msg, 0)
+	if err != nil {
+		return 0, err
+	}
+	return pc.conn.Write(pkg.Bytes())
+}
+
+func (pc *ProtoConn) WriteWithId(id uint16, d []byte) (int, error) {
+	if !pc.authOk {
+		return 0, ErrUnauth
+	}
+	//pkg, err := EncodePkg(d, Msg, 0)
+	pkg, err := NewMsgIdOptPkg(d, id)
 	if err != nil {
 		return 0, err
 	}
@@ -404,6 +444,12 @@ func (pc *ProtoConn) Run(ctx context.Context) error {
 				log.Printf("haven't auth ok")
 				continue
 			}
+			//msgHandlerv2 优先，如果配置msgHandlerv2 就不会调用msgHandler
+			if pc.msgHandlerv2 != nil {
+				pc.msgHandlerv2(pc, pkg)
+				continue
+			}
+
 			if pc.msgHandler == nil {
 				log.Printf("haven't set raw msg Handler ?")
 				continue

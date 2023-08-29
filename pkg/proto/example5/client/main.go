@@ -51,18 +51,19 @@ func dialFail(err error) {
 	log.Printf("dial fail, err:%v", err)
 }
 
-func connectHandle(s session.Sessioner) {
-	go func() {
+func connectHandle(s session.Sessioner) error {
+	go func() error {
 		for {
 			err := s.WriteMsg(11, []byte("msg11"))
 			if err != nil {
-				log.Println(err)
-				return
+				log.Printf("WriteMsg err:%v", err)
+				return err
 			}
-			log.Println("send id 11 msg ok")
+			log.Println("send id 11 msg ok on ", s.SessionID())
 			time.Sleep(time.Second * 2)
 		}
 	}()
+	return nil
 }
 
 func msgHandle(s session.Sessioner, id uint16, d []byte) {

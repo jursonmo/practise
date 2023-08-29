@@ -64,6 +64,7 @@ const (
 	AuthReq  = 1
 	AuthOk   = 2
 	AuthFail = 3
+	MsgIdOpt = 4
 
 	//payload Type, 0 mean raw Binary
 	RawBinary      = 0
@@ -153,6 +154,13 @@ func EncodeCmdPkg(cmd byte, payload []byte) (*ProtoPkg, error) {
 	p.SetCmd(cmd)
 	p.Payload = payload
 	return p, nil
+}
+
+func NewMsgIdOptPkg(payload []byte, msgid uint16) (*ProtoPkg, error) {
+	v := make([]byte, 2)
+	binary.BigEndian.PutUint16(v, msgid)
+	msgIdOpt := ProtoHeaderOption{T: byte(MsgIdOpt), L: uint16(len(v)), V: v}
+	return EncodePkg(payload, Msg, 0, []ProtoHeaderOption{msgIdOpt}...)
 }
 
 func EncodePkg(payload []byte, pkgType byte, payloadType PayloadType, opts ...ProtoHeaderOption) (*ProtoPkg, error) {

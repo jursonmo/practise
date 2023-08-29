@@ -10,7 +10,7 @@ func WithOnDialFail(h func(error)) Option {
 	}
 }
 
-func WithOnConnect(h func(session.Sessioner)) Option {
+func WithOnConnect(h func(session.Sessioner) error) Option {
 	return func(c *Client) {
 		c.onConnect = h
 	}

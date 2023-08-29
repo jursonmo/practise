@@ -35,7 +35,7 @@ type Client struct {
 
 	//handlers
 	onDialFail func(error)
-	onConnect  func(session.Sessioner)
+	onConnect  func(session.Sessioner) error
 	onStop     func(string)
 
 	pc      *proto.ProtoConn
@@ -100,7 +100,6 @@ func NewClient(endpoints []string, opts ...Option) (*Client, error) {
 func (c *Client) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	var egctx context.Context
-	c.eg, egctx = errgroup.WithContext(c.ctx) //要用c.ctx, 这样c.cancel 才能 取消egctx
 	go func() error {
 		for {
 			if err := c.ctx.Err(); err != nil {
@@ -112,22 +111,26 @@ func (c *Client) Start(ctx context.Context) error {
 				dial.WithBackOffer(backoffx.NewDynamicBackoff(time.Second*2, time.Second*30, 2.0)),
 				dial.WithKeepAlive(time.Second*5), dial.WithTcpUserTimeout(time.Second*5), dial.WithDialFailFunc(c.onDialFail))
 			if err != nil {
-				log.Println(err)
-				continue
+				log.Println("dial stoped, err:", err)
+				//dial 会一直在后台拨号，知道ctx 被cancel, 所以dial返回err 后，就需要继续dial 来，直接返回
+				return err
 			}
 
 			c.conn = conn
 			c.pc = proto.NewProtoConn(conn, false, proto.ProtoMsgHandle(c.msgHandle))
+			//如果设置了SetMsgHandlerv2, 那么c.msgHandle 就不起作用
+			c.pc.SetMsgHandlerv2(proto.ProtoMsgHandlev2(c.msgHandlev2))
+
 			err = c.pc.Init(c.ctx)
 			if err != nil {
-				log.Println(err)
+				log.Println("pc.Init err:", err)
 				continue
 			}
-
 			if c.onConnect != nil {
-				c.onConnect(c)
+				return c.onConnect(c)
 			}
 
+			c.eg, egctx = errgroup.WithContext(c.ctx) //要用c.ctx, 这样c.cancel 才能 取消egctx
 			c.eg.Go(func() error {
 				err := c.pc.Run(egctx)
 				log.Println(err)
@@ -136,23 +139,26 @@ func (c *Client) Start(ctx context.Context) error {
 			//注册heartbeat 处理请求回调，默认就是回应原始数据,类型是HeartBeatRespId
 			c.addRouter(uint16(session.HeartBeatReqId),
 				session.HandleFunc(func(s session.Sessioner, msgid uint16, d []byte) {
+					log.Printf("receive hb request:%s", string(d))
 					err := s.WriteMsg(session.HeartBeatRespId, d)
 					if err != nil {
-						log.Println(err)
+						log.Println("receive hb request, and send hb response err:", err)
 					}
 				}))
 
 			//发送心跳
 			hbsend := func(req heartbeat.HbPkg) error {
 				buf := bytes.NewBuffer(make([]byte, 0, 128))
-				binary.Write(buf, binary.BigEndian, uint16(session.HeartBeatReqId))
+				//binary.Write(buf, binary.BigEndian, uint16(session.HeartBeatReqId))
 				encoder := json.NewEncoder(buf)
 				err := encoder.Encode(&req)
 				if err != nil {
 					return err
 				}
-				log.Printf("send heartbeat requet seq:%d", req.Seq)
-				_, err = c.pc.Write(buf.Bytes())
+				log.Printf("send heartbeat requet len:%d, data:%s", len(buf.Bytes()), buf.String())
+				//_, err = c.pc.Write(buf.Bytes())
+
+				_, err = c.pc.WriteWithId(session.HeartBeatReqId, buf.Bytes())
 				return err
 			}
 
@@ -165,10 +171,11 @@ func (c *Client) Start(ctx context.Context) error {
 				hb := heartbeat.HbPkg{}
 				err := json.Unmarshal(d, &hb)
 				if err != nil {
-					log.Println(err)
+					log.Printf("handle hb response err:%v", err)
 					return
 				}
 				log.Printf("receive hb response:%+v\n", hb)
+				return
 				heartbeater.PutResponse(hb)
 			}))
 
@@ -176,6 +183,12 @@ func (c *Client) Start(ctx context.Context) error {
 				err := heartbeater.Start(egctx)
 				log.Printf("heartbeat quit, err:%v", err)
 				return err
+			})
+
+			c.eg.Go(func() error {
+				<-egctx.Done()
+				c.pc.Close()
+				return egctx.Err()
 			})
 			c.eg.Wait()
 		}
@@ -212,11 +225,33 @@ func (c *Client) msgHandle(pc *proto.ProtoConn, d []byte, t byte) error {
 	return nil
 }
 
+func (c *Client) msgHandlev2(pc *proto.ProtoConn, pkg proto.Pkger) error {
+	msgid, ok := pkg.MsgId()
+	if !ok {
+		log.Println("msgHandlev2 can't get msgid")
+		return nil
+	}
+	r := c.GetRouter(msgid)
+	if r == nil {
+		return nil
+	}
+	r.Handle(c, msgid, pkg.Paylaod())
+	return nil
+}
+
 func (c *Client) WriteMsg(msgid uint16, d []byte) error {
-	buf := make([]byte, len(d)+2)
-	binary.BigEndian.PutUint16(buf, msgid)
-	copy(buf[2:], d)
-	_, err := c.pc.Write(buf)
+	// 这里需要make 一个大的内存对象，还需要copy一次
+	// buf := make([]byte, len(d)+2)
+	// binary.BigEndian.PutUint16(buf, msgid)
+	// copy(buf[2:], d)
+	// _, err := c.pc.Write(buf)
+	// return err
+
+	return c.WriteMsgv2(msgid, d)
+}
+
+func (c *Client) WriteMsgv2(msgid uint16, d []byte) error {
+	_, err := c.pc.WriteWithId(msgid, d)
 	return err
 }
 
