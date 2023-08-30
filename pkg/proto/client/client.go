@@ -126,8 +126,10 @@ func (c *Client) Start(ctx context.Context) error {
 				log.Println("pc.Init err:", err)
 				continue
 			}
+			s := NewSession(c, c.pc)
 			if c.onConnect != nil {
-				return c.onConnect(c)
+				//c.onConnect(c)
+				c.onConnect(s)
 			}
 
 			c.eg, egctx = errgroup.WithContext(c.ctx) //要用c.ctx, 这样c.cancel 才能 取消egctx
@@ -136,6 +138,7 @@ func (c *Client) Start(ctx context.Context) error {
 				log.Println(err)
 				return err
 			})
+
 			//注册heartbeat 处理请求回调，默认就是回应原始数据,类型是HeartBeatRespId
 			c.addRouter(uint16(session.HeartBeatReqId),
 				session.HandleFunc(func(s session.Sessioner, msgid uint16, d []byte) {
@@ -175,7 +178,7 @@ func (c *Client) Start(ctx context.Context) error {
 					return
 				}
 				log.Printf("receive hb response:%+v\n", hb)
-				return
+				//return //模拟心跳收不到的情况
 				heartbeater.PutResponse(hb)
 			}))
 
@@ -187,7 +190,7 @@ func (c *Client) Start(ctx context.Context) error {
 
 			c.eg.Go(func() error {
 				<-egctx.Done()
-				c.pc.Close()
+				c.pc.Close() //make pc.Run() quit
 				return egctx.Err()
 			})
 			c.eg.Wait()

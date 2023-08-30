@@ -54,6 +54,9 @@ func dialFail(err error) {
 func connectHandle(s session.Sessioner) error {
 	go func() error {
 		for {
+			//bug:如果client 断开后，重连比较快，那么Client{}.WriteMsg 不回返回错误，也就是这个for循环一直可以发送，
+			//重连成功后产生新的for也能一直发送,所以需要Sessioner 不能一直指向Client{} 这个一直存在的对象
+			//也就是每次重连后，Sessioner 都指向新的对象， 旧的对象的底层conn 是断开的状态，这样这里writeMsg就能感知错误并返回。
 			err := s.WriteMsg(11, []byte("msg11"))
 			if err != nil {
 				log.Printf("WriteMsg err:%v", err)
