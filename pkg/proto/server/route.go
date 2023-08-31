@@ -1,15 +1,13 @@
 package server
 
 import (
-	"errors"
-
 	"github.com/jursonmo/practise/pkg/proto/session"
 )
 
 func (c *Server) AddRouter(msgid uint16, r session.Router) error {
-	//业务数据id 从1开始，0 预留给了心跳报文
-	if msgid == HeartBeatId {
-		return errors.New("msgid must gt 0")
+	//业务数据id 从10开始，0-9 预留私有控制消息，比如心跳报文
+	if err := session.CheckMsgId(msgid); err != nil {
+		return err
 	}
 	return c.addRouter(msgid, r)
 }
