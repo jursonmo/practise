@@ -129,7 +129,7 @@ func (c *Client) Start(ctx context.Context) error {
 			s := NewSession(c, c.pc)
 			if c.onConnect != nil {
 				//c.onConnect(c)
-				c.onConnect(s)
+				go c.onConnect(s)
 			}
 
 			c.eg, egctx = errgroup.WithContext(c.ctx) //要用c.ctx, 这样c.cancel 才能 取消egctx

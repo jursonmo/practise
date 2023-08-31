@@ -7,7 +7,6 @@ import (
 
 	"github.com/jursonmo/practise/pkg/proto"
 	"github.com/jursonmo/practise/pkg/proto/session"
-	"golang.org/x/sync/errgroup"
 )
 
 type Session struct {
@@ -17,8 +16,7 @@ type Session struct {
 	//srv  *Server
 	cli *Client
 	pc  *proto.ProtoConn
-	eg  *errgroup.Group
-
+	//eg  *errgroup.Group
 	//routers *session.RouterRegister
 }
 
@@ -47,7 +45,7 @@ func (s *Session) SessionID() string {
 	if conn := s.UnderlayConn(); conn != nil {
 		return fmt.Sprintf("%v->%v", conn.LocalAddr(), conn.RemoteAddr())
 	}
-	return ""
+	return "nil"
 }
 func (s *Session) Endpoints() []*url.URL {
 	return s.cli.Endpoints()
