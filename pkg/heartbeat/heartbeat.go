@@ -41,7 +41,7 @@ type Heartbeat struct {
 
 	name     string
 	lastTime time.Duration //上次收到心跳回应的时间点
-	ttl      time.Duration
+	rrt      time.Duration //心跳的rrt round-trip time
 	respChan chan HbPkg
 	startSeq uint32
 	onFlyReq HbPkg
@@ -152,9 +152,9 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 			hb.failCnt = 0
 			hb.lastTime = timex.Now() //记录收到心跳回应的时间
 			timer.Reset(hb.Intvl)     //确保定时器重置
-			hb.ttl = timex.Since(p.Ts)
+			hb.rrt = timex.Since(p.Ts)
 			if hb.onSuccess != nil {
-				hb.onSuccess(hb.name, hb.ttl)
+				hb.onSuccess(hb.name, hb.rrt)
 			}
 		case <-timer.Done():
 			//这里表示心跳超时
