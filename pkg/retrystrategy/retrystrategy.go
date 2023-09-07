@@ -4,12 +4,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jursonmo/practise/pkg/timex"
+
 	"github.com/jursonmo/practise/pkg/backoffx"
 )
 
 type RetryStrategyer interface {
 	Retryable() bool
-	Tried() int //how many time have tried
+	Tried() int               //how many time have tried
+	RetryTime() time.Duration //重试了多久，即距离上次resetAt 多长时间了
 	MaxRetry() int
 	backoffx.Backoffer
 }
@@ -20,11 +23,12 @@ type RetryStrategy struct {
 	sync.Mutex
 	maxRetry int
 	retry    int
+	resetAt  time.Duration
 	backoff  backoffx.Backoffer
 }
 
 //maxRetry == 0 means not limit
-func NewRetryStrategy(maxRetry int, backoff backoffx.Backoffer) *RetryStrategy {
+func NewRetryStrategy(maxRetry int, backoff backoffx.Backoffer) RetryStrategyer {
 	return &RetryStrategy{maxRetry: maxRetry, backoff: backoff}
 }
 
@@ -49,6 +53,7 @@ func (r *RetryStrategy) Reset() {
 	r.Lock()
 	defer r.Unlock()
 	r.retry = 0
+	r.resetAt = timex.Now()
 	r.backoff.Reset()
 }
 
@@ -56,6 +61,13 @@ func (r *RetryStrategy) Tried() int {
 	r.Lock()
 	defer r.Unlock()
 	return r.retry
+}
+
+func (r *RetryStrategy) RetryTime() time.Duration {
+	if r.resetAt == 0 {
+		return r.resetAt
+	}
+	return timex.Since(r.resetAt)
 }
 
 func (r *RetryStrategy) MaxRetry() int {
@@ -93,4 +105,11 @@ func (hb *HeartbeatBackoff) Reset() {
 
 func NewHeartbeatBackoff(intvl, failIntvl time.Duration) backoffx.Backoffer {
 	return &HeartbeatBackoff{intvl: intvl, failIntvl: failIntvl}
+}
+
+var DefaultHbRetryStrategyer RetryStrategyer
+
+func init() {
+	hbBackoff := NewHeartbeatBackoff(5*time.Second, time.Second)
+	DefaultHbRetryStrategyer = NewRetryStrategy(3, hbBackoff)
 }
