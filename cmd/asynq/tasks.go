@@ -44,7 +44,7 @@ func NewImageResizeTask(src string) (*asynq.Task, error) {
 		return nil, err
 	}
 	// task options can be passed to NewTask, which can be overridden at enqueue time.
-	return asynq.NewTask(TypeImageResize, payload, asynq.MaxRetry(5), asynq.Timeout(20*time.Minute)), nil
+	return asynq.NewTask(TypeImageResize, payload, asynq.MaxRetry(5), asynq.Timeout(3*time.Minute)), nil
 }
 
 //---------------------------------------------------------------
@@ -57,6 +57,9 @@ func NewImageResizeTask(src string) (*asynq.Task, error) {
 
 func HandleEmailDeliveryTask(ctx context.Context, t *asynq.Task) error {
 	var p EmailDeliveryPayload
+	if deadline, ok := ctx.Deadline(); ok {
+		log.Printf("Email deadline:%v", deadline)
+	}
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
@@ -72,6 +75,11 @@ type ImageProcessor struct {
 
 func (processor *ImageProcessor) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	var p ImageResizePayload
+
+	if deadline, ok := ctx.Deadline(); ok {
+		log.Printf("ImageProcessor deadline:%v", deadline)
+	}
+
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
 		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
 	}
