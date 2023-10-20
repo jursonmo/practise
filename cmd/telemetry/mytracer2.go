@@ -68,6 +68,7 @@ func main() {
 	nodeName := "node1"
 
 	carrier := make(map[string][]string)
+	//carrier := make(propagation.HeaderCarrier)
 	ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(carrier))
 	// Extract 后，可以通过trace.SpanFromContext(ctx) 来获取Span
 	//但是carrier.Get(traceparentHeader) 为空，返回原来的ctx。 如果有则生成一个remote==true的SpanContext

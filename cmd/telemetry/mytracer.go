@@ -178,7 +178,14 @@ func node(nodeName string, c map[string][]string) {
 	ctx, childSpan := tracer.Start(ctx, nodeName+"sub1")
 	//模拟子服务处理花费的时间
 	time.Sleep(time.Millisecond * 50)
-	childSpan.End()
+	//打印span 信息，包含 traceID spanID
+	childsc := childSpan.SpanContext()
+	log.Printf("%s childSpan spanContext:%+v\n", nodeName, childsc)
+	//起码要含有时间戳、起止时间、Trace 的 ID、当前 Span 的 ID、父 Span 的 ID 等能够满足追踪需要的信息。
+	// traceID 全场不变，spanID 变，childsc 怎么知道自己的parent span id 是谁?其实childSpan 包含
+	// 父 Span 的 ID, 只是childSpan.SpanContext()等到的childsc没有包含父Span的信息。
+
+	childSpan.End() //这个操作会上报childSpan的信息，包括父span的信息，不然jaeger是无法绘制tree形图的
 }
 
 /*
