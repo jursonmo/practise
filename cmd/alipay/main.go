@@ -17,16 +17,16 @@ import (
 
 var appId = "9021000122692113"
 
-//复制“应用公钥”至支付宝开放平台，进而获取支付宝公钥。
+// 复制“应用公钥”至支付宝开放平台，进而获取支付宝公钥。
 var appPubKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAl5rsu2H1Vby3INlEWaQSgDSOSomTppp4b/lgEgGK6tVeDfBZmSRxmX5PpweSPrf/szFkM0cUbXyrhLrIH37uLEquAIQokXCXjQBSazee2edRVotwEDY/th77thlvUTf/9A74+WNVDyiVcgUyN2G+PZtrphPXFQ1GXLY5EhrvUoRuOdozSXHzbQpTS4k0q/YssqSjQSccjto9A3wsMDMXLHqYDck2Ra1gXFy2Yjjg5KowEoJJYjY8aC78EG8shInkEEoLiFHR1F0mAcoXDAAegvgECYHDXtdzjStsgcLOnZ1ogeAPwMR88fRcX3ioanVYKotV/4130+JeQ2QQbCRWkwIDAQAB"
 var appPrivateKey = "MIIEogIBAAKCAQEAl5rsu2H1Vby3INlEWaQSgDSOSomTppp4b/lgEgGK6tVeDfBZmSRxmX5PpweSPrf/szFkM0cUbXyrhLrIH37uLEquAIQokXCXjQBSazee2edRVotwEDY/th77thlvUTf/9A74+WNVDyiVcgUyN2G+PZtrphPXFQ1GXLY5EhrvUoRuOdozSXHzbQpTS4k0q/YssqSjQSccjto9A3wsMDMXLHqYDck2Ra1gXFy2Yjjg5KowEoJJYjY8aC78EG8shInkEEoLiFHR1F0mAcoXDAAegvgECYHDXtdzjStsgcLOnZ1ogeAPwMR88fRcX3ioanVYKotV/4130+JeQ2QQbCRWkwIDAQABAoIBAGgYWSnEdhbbkAY/CF5geM+MxpLJahdAAygnW16hrofV31HE0VCEpHeXMgvm9/SWlDyu0jUfPhh7PK3TLivqFJFW6aizFcPfQj/vk6fItgq6eK/q6BRJm29qULzVNAjZYaZrTWq3WKUi4ZI7nSJHu79DYyPShaEPz1tDR2Z2FhNahwzWP+DQV2MIBn3RGValzSm7gI/RVp00YB0CFi9+eG/aYNoaV1hxp++8Q0CjuThg0B20bWel5Tu5McxRJL7vYeJrkQZPWxpkAEr0nyaLcLQYK11RzLcK3Twu6w69mPK4qbQLqnz9YYmqlcbxiHxy5u7ZitllaXIRDwHlHIlf1GkCgYEA5ox1kdTngCL9n+oIkEB37SMpFblAqhpaPN6FrWaOVS+q8dftidd3shx66KTwfhpnWY4P88t7gNSM0PJko/ES1c0dZmvzJGwKWOAIrl9Ym8OorLe2yL4uq5CBQBRJmXTic33yot38toAbry/mSPPF+6pBtUycPAHRryr8+DtoLcUCgYEAqFdxFedAvJQnAmnfldoNfMVwbGhYAj3p+UaLQwy5h1xDMeDv48e4fGxEQIzKK5Jpbe7p18Uk9uGThCiuEFr2BjDY9nP79Bs5ri8Rey4KvLQ2HQbuIZklgW54/ZpxAAttq130OfLIyOnZi14IPb0+YBS3jXb7+yr51iI0Rxrb0HcCgYBZmIp0QxY4gOCpzezICpXQrZJg496SfK1G7H9s1OdJib3YQL8Ki5bzvAez862WhDJX5lKivxhfB7s11I1x/NUCC7V6QUd7hxU6Vs5o3Zr05cPeY4MAXpCKkhz4xymXHoqGsZKi4rw8PGsF2QqYnUv6sr7Yc05gL6DKf11SJtwktQKBgGt2Rm5hDWZUfQKBa4VRiUKZF0dc5LGprG7Apa3LtbO/JfX1Ta3ulMp4oqlCNtzRvhO7a/OdmhcvsOewwE0Yg+03yYiqSbBuoMecrGAh6CDGObUV83XnOZYCW6IosPICWaQHehxz69C113WsNT6US/kxwGrCBeE0cgBMHWs2rhPJAoGAVmUHc8j2RroiFYJbCQBhtCPTsmq0iV/a6y5E+c51c8mnAmPffn2uXpjdc2kweU9TJ6zkllL+9x9Yn0kowRO7T8cDg0CEOje1VWqwx1MMP9lkh/viSZ6ah5qOd54OL6BrjhNWZ50nrNeynmXE/aqEsJRHN8qBx63uRb8UdN1Jiws="
 
 var aliPayPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmXRyweneKRYVS6xdYALGx4PVcYzmUTWn0CYKYGpKpww1KAaUDF+xypT6gqgq5PKh25NykoT9yGr+hCGzuUstVPz/Hfqx4WgrcYnRBnFywcVmvI4aliu0Qjj4j6i6NBMFw6OsiszYZOutoDAdERiGYDug1Djy5m1cs4dhtCy5JXctQAqxlNJdhkdU5vP9FwrmzsyEqMr4oDIFjvr4GYmtboJJX2fPh5Yigfr7/fpttJDhhbvpfXYxQGOkKJs005vaf5tzta/sxS7sT454x4mBK3ByB2dojM0bw0Pba1hHgqW3BNxow4Y5Vq8AJ14FchkJPwAuTtlKKkGmfCOYLYi2MQIDAQAB"
 
-//./main -addr=x.x.x.x:9090 -trade_no=dingdan_2234567890
+// ./main -addr=x.x.x.x:9090 -trade_no=dingdan_2234567890
 var (
 	addr_ptr = flag.String("addr", "1.1.1.1:8080", "listen addr")
-	trade_no = flag.String("trade_no", "trade_no_unset", "trade_no")
+	trade_no = flag.String("trade_no", "trade_no_unset", "trade_no") //订单号每次都要不一样,所以用启动参数设置
 )
 
 func main() {
@@ -140,4 +140,18 @@ form_trade_status:TRADE_SUCCESS, notifyReq_status:TRADE_SUCCESS
 [GIN] 2023/10/23 - 16:41:30 | 200 |     300.092µs |  119.42.228.161 | POST     "/alipay/payNotify"
 payReturn msg:payRetrun 验签成功, notifyReq:map[app_id:9021000122692113 auth_app_id:9021000122692113 charset:utf-8 method:alipay.trade.page.pay.return out_trade_no:dingdan_2234567890 seller_id:2088721004255891 timestamp:2023-10-24 00:41:36 total_amount:88.88 trade_no:2023102422001455900501350392 version:1.0]
 [GIN] 2023/10/23 - 16:41:39 | 200 |     340.541µs |   120.229.69.60 | GET      "/alipay/payReturn?charset=utf-8&out_trade_no=dingdan_2234567890&method=alipay.trade.page.pay.return&total_amount=88.88&sign=AjNnCwMelyggiIJANrbdjPUrsjxxwX3RtFtKDrnx0HhL%2FRwPMZZLB3nHdXNyLZqq%2Bsmd1J0IK7Fq7%2FQXgokYwnWN1ruguA%2FJgooQG3QSiIqR2BP6cOsUqzR7bXB3XRSiYRfKny8JGevyBy8UKvPgOyqRdA73QyxyFTXw6AZsLtJ8G%2BTIE57s%2BFaPWRS%2B9fjX1JhGabDKmhU0rTGgorsn8LFXDjRwQPkRuGm3TFw0hhaKLAkGGdw5xE3djwBPcQWYXwZEkmBTz0CK%2F3C%2BlbT26QTCMp71AyG%2FoLj6uWrFtc1Jm1I8tP6SGUsw1z1HVTkwj75vmiTgH0%2FB0ZMFSOhqRw%3D%3D&trade_no=2023102422001455900501350392&auth_app_id=9021000122692113&version=1.0&app_id=9021000122692113&sign_type=RSA2&seller_id=2088721004255891&timestamp=2023-10-24+00%3A41%3A36"
+*/
+
+/*
+./main -addr=x.x.x.x:9090 -trade_no=dingdan_1234567890
+
+payUrl: https://openapi-sandbox.dl.alipaydev.com/gateway.do?
+app_id=9021000122692113&biz_content=%7B%22out_trade_no%22%3A%22dingdan_1234567890%22%2C%22
+product_code%22%3A%22FAST_INSTANT_TRADE_PAY%22%2C%22subject%22%3A%22%E7%BD%91%E7%AB%99%E6%B5%8B%E8%AF%95%E6%94%AF%E4%BB%98%22%2C%22
+total_amount%22%3A%2288.88%22%7D&charset=utf-8&format=JSON&
+method=alipay.trade.page.pay&notify_url=http%3A%2F%2F111.206.113.126%3A9090%2F
+alipay%2FpayNotify&return_url=http%3A%2F%2F111.206.113.126%3A9090%2F
+alipay%2FpayReturn&sign=MmSddgHGlAPfAYwSgI5LTAuapI%2B%2FjhykK7LmNbH1cO
+TyzXYsQ7LycAaCLDsEAwSg7WH2WufSJQi3%2BHp2XXn01%2FVg2AK6v%2FQPpFnBZfIjesBwALp3TCnl8dTIJJMBbtB0luZKBXBJQa2pAvjvcHw5Ss9WSVYoYfwv6wc5oKkD2Dq%2Fmp7i6VqC8vLDI8TNcWifS0hLOi6FIJYmu%2F6TzrfnB7NTabPJR8l27vr8VnY6oepktlWOMeBC2dyfsUNH8ajsecSxxdoSYurqCLvAg0LOagj8RCqHwKmZSIQH6xDvmzSJ8vcUj4Vfl80daQmC1KI1BU%2B%2BVH3ZIkhiHzfBQKo5Ng%3D%3D
+&sign_type=RSA2&timestamp=2023-10-29+23%3A43%3A14&version=1.0
 */
