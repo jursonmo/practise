@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -17,6 +18,7 @@ var (
 	start         = flag.String("start", ">", "consumer start from ?")
 	ackEnable     = flag.Bool("ack", false, "ack message")
 	count         = flag.Int("count", 1, "max messages on one read call")
+	block         = flag.Int("block", 0, "seconds timeout for one read call")
 )
 
 // 如果消费者读到消息，没有ack,就会一直存在pending里，消费者下次消费时，可以指定从0开始，server 会把pending 的消息发给消费者
@@ -87,13 +89,15 @@ func consumeMessages(streamName, groupName, consumerID string) {
 			Consumer: consumerID,
 			//Streams:  []string{streamName, ">"},
 			Streams: []string{streamName, *start},
-			Block:   0,             // Wait indefinitely for new messages
-			Count:   int64(*count), // Process message at a time
+			Block:   time.Duration(*block) * time.Second, // 0:Wait indefinitely for new messages
+			Count:   int64(*count),                       // Process message at a time
 		}).Result()
 		if err != nil {
+			//超时打印: Consumer consumer1: Error reading from stream: redis: nil
 			log.Printf("Consumer %s: Error reading from stream: %v", consumerID, err)
 			continue
 		}
+
 		readcall++
 		for _, message := range messages {
 			for _, xMessage := range message.Messages {
