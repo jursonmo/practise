@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-pay/gopay"
@@ -23,10 +24,11 @@ var appPrivateKey = "MIIEogIBAAKCAQEAl5rsu2H1Vby3INlEWaQSgDSOSomTppp4b/lgEgGK6tV
 
 var aliPayPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmXRyweneKRYVS6xdYALGx4PVcYzmUTWn0CYKYGpKpww1KAaUDF+xypT6gqgq5PKh25NykoT9yGr+hCGzuUstVPz/Hfqx4WgrcYnRBnFywcVmvI4aliu0Qjj4j6i6NBMFw6OsiszYZOutoDAdERiGYDug1Djy5m1cs4dhtCy5JXctQAqxlNJdhkdU5vP9FwrmzsyEqMr4oDIFjvr4GYmtboJJX2fPh5Yigfr7/fpttJDhhbvpfXYxQGOkKJs005vaf5tzta/sxS7sT454x4mBK3ByB2dojM0bw0Pba1hHgqW3BNxow4Y5Vq8AJ14FchkJPwAuTtlKKkGmfCOYLYi2MQIDAQAB"
 
-// ./main -addr=x.x.x.x:9090 -trade_no=dingdan_2234567890
+// out_trade_no:64个字符以内，仅支持字母、数字、下划线
+// ./main -addr=x.x.x.x:9090 -out_trade_no=dingdan_2234567890
 var (
-	addr_ptr = flag.String("addr", "1.1.1.1:8080", "listen addr")
-	trade_no = flag.String("trade_no", "trade_no_unset", "trade_no") //订单号每次都要不一样,所以用启动参数设置
+	addr_ptr     = flag.String("addr", "1.1.1.1:8080", "listen addr")
+	out_trade_no = flag.String("out_trade_no", "out_trade_no_unset", "out_trade_no") //订单号每次都要不一样,所以用启动参数设置
 )
 
 func main() {
@@ -58,7 +60,7 @@ func main() {
 	//请求参数
 	bm := make(gopay.BodyMap)
 	bm.Set("subject", "网站测试支付")
-	bm.Set("out_trade_no", *trade_no) //订单号每次都要不一样，一样的话，会提示该订单已经成功付款
+	bm.Set("out_trade_no", *out_trade_no) //订单号每次都要不一样，一样的话，会提示该订单已经成功付款
 	bm.Set("total_amount", "88.88")
 	bm.Set("product_code", "FAST_INSTANT_TRADE_PAY")
 
@@ -82,6 +84,11 @@ func main() {
 }
 
 func payNotify(c *gin.Context) {
+	//测试是payNotify和payReturn是哪个先,结论是先阿里平台调用notify后，再返回浏览器调用returnUrl
+	//这样商家就可以根据支付结果返回自定义的信息给用户。没有returnUrl, 只能支付宝平台展示信息，不够灵活
+	time.Sleep(time.Second)
+	xlog.Info("sleep over")
+
 	notifyReq, err := alipay.ParseNotifyToBodyMap(c.Request)
 	if err != nil {
 		xlog.Error("ParseNotifyToBodyMap err:", err)
@@ -135,23 +142,26 @@ func payReturn(c *gin.Context) {
 }
 
 /*
-payNotify msg:payNotify 验签成功, notifyReq:map[app_id:9021000122692113 auth_app_id:9021000122692113 buyer_id:2088722004255900 buyer_pay_amount:88.88 charset:utf-8 fund_bill_list:[{"amount":"88.88","fundChannel":"ALIPAYACCOUNT"}] gmt_create:2023-10-24 00:41:14 gmt_payment:2023-10-24 00:41:28 invoice_amount:88.88 notify_id:2023102401222004129155900501464626 notify_time:2023-10-24 00:41:30 notify_type:trade_status_sync out_trade_no:dingdan_2234567890 point_amount:0.00 receipt_amount:88.88 seller_id:2088721004255891 subject:网站测试支付 total_amount:88.88 trade_no:2023102422001455900501350392 trade_status:TRADE_SUCCESS version:1.0]
+./main -addr=xxx:9090 -trade_no=dingdan_5234567890
+2023/11/12 06:19:20.605307 main.go:73: [DEBUG] >> payUrl: https://openapi-sandbox.dl.alipaydev.com/gateway.do?app_id=9021000122692113&biz_content=%7B%22out_trade_no%22%3A%22dingdan_5234567890%22%2C%22product_code%22%3A%22FAST_INSTANT_TRADE_PAY%22%2C%22subject%22%3A%22%E7%BD%91%E7%AB%99%E6%B5%8B%E8%AF%95%E6%94%AF%E4%BB%98%22%2C%22total_amount%22%3A%2288.88%22%7D&charset=utf-8&format=JSON&method=alipay.trade.page.pay&notify_url=http%3A%2F%2F111.206.113.126%3A9090%2Falipay%2FpayNotify&return_url=http%3A%2F%2F111.206.113.126%3A9090%2Falipay%2FpayReturn&sign=WqJo43K3HLKYnatyT2RbTXY6LH%2BfvV21%2BepvxSbmt%2BTgVHmIGwgdGViTBqE4UXgd2MV47bh0pvNK5o57K2lsECjnDmml9MqXKiTlGuBZk1QGzjKWfPP5m9xuz4OGqDfpidlfPtntd6%2FjH4tb81myhfu%2BHu7e%2BVdRrpUO%2BiqlArboIHpHlffyaCyVM22uJs8jIuSOztq5sgOTijGRYUSdGXy%2BWjnaAuUy%2BipLZ5ia4U5YwQaRwbMAfemrqxl5r5CDiuLIgC6qEQkOveyhtiwuobNU%2FsyFff6ENKoMIJGCOH%2BpDRf%2BuAI%2BQG8XMuxGbRmmIv9d2u%2FuG026gaQvXxshVA%3D%3D&sign_type=RSA2&timestamp=2023-11-12+14%3A19%3A20&version=1.0
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] POST   /alipay/payNotify         --> main.payNotify (3 handlers)
+[GIN-debug] GET    /alipay/payReturn         --> main.payReturn (3 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on xxx:9090
+
+
+2023/11/12 06:20:29.801882 main.go:87: [INFO] >> sleep over
+payNotify msg:payNotify 验签成功, notifyReq:map[app_id:9021000122692113 auth_app_id:9021000122692113 buyer_id:2088722004255900 buyer_pay_amount:88.88 charset:utf-8 fund_bill_list:[{"amount":"88.88","fundChannel":"ALIPAYACCOUNT"}] gmt_create:2023-11-12 14:20:08 gmt_payment:2023-11-12 14:20:26 invoice_amount:88.88 notify_id:2023111201222142027055900501692676 notify_time:2023-11-12 14:20:28 notify_type:trade_status_sync out_trade_no:dingdan_5234567890 point_amount:0.00 receipt_amount:88.88 seller_id:2088721004255891 subject:网站测试支付 total_amount:88.88 trade_no:2023111222001455900501562422 trade_status:TRADE_SUCCESS version:1.0]
 form_trade_status:TRADE_SUCCESS, notifyReq_status:TRADE_SUCCESS
-[GIN] 2023/10/23 - 16:41:30 | 200 |     300.092µs |  119.42.228.161 | POST     "/alipay/payNotify"
-payReturn msg:payRetrun 验签成功, notifyReq:map[app_id:9021000122692113 auth_app_id:9021000122692113 charset:utf-8 method:alipay.trade.page.pay.return out_trade_no:dingdan_2234567890 seller_id:2088721004255891 timestamp:2023-10-24 00:41:36 total_amount:88.88 trade_no:2023102422001455900501350392 version:1.0]
-[GIN] 2023/10/23 - 16:41:39 | 200 |     340.541µs |   120.229.69.60 | GET      "/alipay/payReturn?charset=utf-8&out_trade_no=dingdan_2234567890&method=alipay.trade.page.pay.return&total_amount=88.88&sign=AjNnCwMelyggiIJANrbdjPUrsjxxwX3RtFtKDrnx0HhL%2FRwPMZZLB3nHdXNyLZqq%2Bsmd1J0IK7Fq7%2FQXgokYwnWN1ruguA%2FJgooQG3QSiIqR2BP6cOsUqzR7bXB3XRSiYRfKny8JGevyBy8UKvPgOyqRdA73QyxyFTXw6AZsLtJ8G%2BTIE57s%2BFaPWRS%2B9fjX1JhGabDKmhU0rTGgorsn8LFXDjRwQPkRuGm3TFw0hhaKLAkGGdw5xE3djwBPcQWYXwZEkmBTz0CK%2F3C%2BlbT26QTCMp71AyG%2FoLj6uWrFtc1Jm1I8tP6SGUsw1z1HVTkwj75vmiTgH0%2FB0ZMFSOhqRw%3D%3D&trade_no=2023102422001455900501350392&auth_app_id=9021000122692113&version=1.0&app_id=9021000122692113&sign_type=RSA2&seller_id=2088721004255891&timestamp=2023-10-24+00%3A41%3A36"
-*/
-
-/*
-./main -addr=x.x.x.x:9090 -trade_no=dingdan_1234567890
-
-payUrl: https://openapi-sandbox.dl.alipaydev.com/gateway.do?
-app_id=9021000122692113&biz_content=%7B%22out_trade_no%22%3A%22dingdan_1234567890%22%2C%22
-product_code%22%3A%22FAST_INSTANT_TRADE_PAY%22%2C%22subject%22%3A%22%E7%BD%91%E7%AB%99%E6%B5%8B%E8%AF%95%E6%94%AF%E4%BB%98%22%2C%22
-total_amount%22%3A%2288.88%22%7D&charset=utf-8&format=JSON&
-method=alipay.trade.page.pay&notify_url=http%3A%2F%2F111.206.113.126%3A9090%2F
-alipay%2FpayNotify&return_url=http%3A%2F%2F111.206.113.126%3A9090%2F
-alipay%2FpayReturn&sign=MmSddgHGlAPfAYwSgI5LTAuapI%2B%2FjhykK7LmNbH1cO
-TyzXYsQ7LycAaCLDsEAwSg7WH2WufSJQi3%2BHp2XXn01%2FVg2AK6v%2FQPpFnBZfIjesBwALp3TCnl8dTIJJMBbtB0luZKBXBJQa2pAvjvcHw5Ss9WSVYoYfwv6wc5oKkD2Dq%2Fmp7i6VqC8vLDI8TNcWifS0hLOi6FIJYmu%2F6TzrfnB7NTabPJR8l27vr8VnY6oepktlWOMeBC2dyfsUNH8ajsecSxxdoSYurqCLvAg0LOagj8RCqHwKmZSIQH6xDvmzSJ8vcUj4Vfl80daQmC1KI1BU%2B%2BVH3ZIkhiHzfBQKo5Ng%3D%3D
-&sign_type=RSA2&timestamp=2023-10-29+23%3A43%3A14&version=1.0
+[GIN] 2023/11/12 - 06:20:29 | 200 |  1.001247002s |  119.42.228.161 | POST     "/alipay/payNotify"
+payReturn msg:payRetrun 验签成功, notifyReq:map[app_id:9021000122692113 auth_app_id:9021000122692113 charset:utf-8 method:alipay.trade.page.pay.return out_trade_no:dingdan_5234567890 seller_id:2088721004255891 timestamp:2023-11-12 14:20:34 total_amount:88.88 trade_no:2023111222001455900501562422 version:1.0]
+[GIN] 2023/11/12 - 06:20:37 | 200 |      584.63µs |   120.229.69.98 | GET      "/alipay/payReturn?charset=utf-8&out_trade_no=dingdan_5234567890&method=alipay.trade.page.pay.return&total_amount=88.88&sign=kniMkwW6QI%2F1rwo%2BzMZXyhiq74uP58Ql%2FXmjokzPak5PSeqeoWrPEKPHaC8ctUTq5VLsapSWOktrQNqaTBur7IrCGetHIu9nxc0MIvw01Vl2eA6bjeDDpkgACiMCifdhUgm%2FI90HssNchEQZZrTKfTxEhaehaqFXPpsOLcjk9iqFztLzLafWAS91UMZiuEQNTNiiGuamFzCNDRqeQEjkDTd%2FnLRt00UGrWMg%2BUKj2qiARV88cbYKZiHtYQQSoTN68w146uLoJBQWTHYFi0ovsOcfN%2Fj%2Bl1piFLZ8I8Gc7TcY6Hj4VQOsQMj1gHDkvEDyct3ArRJvFLkWuSq%2FLGJt4g%3D%3D&trade_no=2023111222001455900501562422&auth_app_id=9021000122692113&version=1.0&app_id=9021000122692113&sign_type=RSA2&seller_id=2088721004255891&timestamp=2023-11-12+14%3A20%3A34"
+[GIN] 2023/11/12 - 06:20:38 | 404 |         663ns |   120.229.69.98 | GET      "/favicon.ico"
 */
