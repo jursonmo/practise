@@ -48,7 +48,7 @@ func main() {
 	}
 	// Register our TracerProvider as the global so any imported
 	// instrumentation in the future will default to using it.
-	otel.SetTracerProvider(tp)
+	otel.SetTracerProvider(tp) //供 GetTracerProvider() 读取
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -152,7 +152,7 @@ func node(nodeName string, c map[string][]string) {
 		log.Printf("parent Span from remote is in Valid:%+v", fsc)
 	}
 	log.Printf("parent Span from remote:%+v", fsc)
-
+	//tracer = fromSpan.TracerProvider().Tracer(TraceName) //用这种方式获取tp 更好，否则就用全局的tp
 	//tp := otel.GetTracerProvider()
 	//tracer := tp.Tracer(fmt.Sprintf("myTracer-%s", nodeName))
 	//如果是相同的名称，那么得到同一个Tracer,会有啥影响
