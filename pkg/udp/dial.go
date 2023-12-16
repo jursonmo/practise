@@ -66,7 +66,7 @@ func (c *UDPConn) ReadBatchLoop(handler func(msg []byte)) error {
 	}
 }
 
-//todo: 以后也改成pool 来复用对象
+// todo: 以后也改成pool 来复用对象
 func (c *UDPConn) handlePacket(msg []byte) {
 	//分配新的内存对象,并且copy 一次
 	b := make([]byte, len(msg))
@@ -74,7 +74,7 @@ func (c *UDPConn) handlePacket(msg []byte) {
 	c.PutRxQueue(b)
 }
 
-//相比ReadBatchLoop->handlePacket, 复用了对象，少一次copy
+// 相比ReadBatchLoop->handlePacket, 复用了对象，少一次copy
 func (c *UDPConn) readBatchLoopv2() {
 	var err error
 	InitPool(c.maxBufSize)
@@ -107,6 +107,10 @@ func (c *UDPConn) readBatchLoopv2() {
 }
 
 func (c *UDPConn) PutRxQueue2(b MyBuffer) {
+	//todo: check control packet or data packet,
+	//但是我认为，不应该在这里做控制层相关的业务，因为它只需提供连接的收发操作即可
+	//如果需要握手验证和心跳，应该是在业务层做，或者在业务层和底层之间加一层来实现协议格式和控制协议报文
+
 	//非阻塞模式,避免某个UDPConn 的数据没有被处理而阻塞了listener 或者 UDPConn 继续接受数据
 	select {
 	case c.rxqueue <- b:
