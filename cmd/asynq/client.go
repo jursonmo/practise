@@ -22,7 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not create task: %v", err)
 	}
-	info, err := client.Enqueue(task, asynq.Timeout(10*time.Minute)) //这里的timeout是告诉处理者处理这个消息时ctx 的超时时间
+	info, err := client.Enqueue(task, asynq.Queue("low"), asynq.Timeout(10*time.Minute)) //这里的timeout是告诉处理者处理这个消息时ctx 的超时时间
 	//info, err := client.Enqueue(task)
 	if err != nil {
 		log.Fatalf("could not enqueue task: %v", err)
@@ -34,7 +34,7 @@ func main() {
 	//            Use ProcessIn or ProcessAt option.
 	// ------------------------------------------------------------
 	task1, err := NewEmailDeliveryTask(44, "should handler in one minute")
-	info, err = client.Enqueue(task1, asynq.ProcessIn(time.Minute))
+	info, err = client.Enqueue(task1, asynq.ProcessIn(time.Minute)) //timeout 默认是30分钟吗1800秒
 	if err != nil {
 		log.Fatalf("could not schedule task: %v", err)
 	}
