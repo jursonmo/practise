@@ -23,6 +23,7 @@ func main() {
 	}
 
 	testPkgerr()
+	testErrStack()
 }
 
 func testPkgerr() {
@@ -35,4 +36,16 @@ func testPkgerr() {
 	}
 	fmt.Println(err)
 	fmt.Printf("pkt err stack:%+v\n", err) //%+v 它可以打印堆栈
+}
+
+func testErrStack() {
+	fmt.Println("-------------testErrStack-----------")
+	err := pkgerr.New("new my error")
+	fmt.Printf("-----pkgerr.New() stack:%+v\n", err)
+
+	err = pkgerr.WithStack(err)
+	fmt.Printf("-----pkgerr.WithStack(err):%+v\n", err)
+
+	err = pkgerr.Wrapf(err, "my error:%s", "test")
+	fmt.Printf("-----pkgerr.Wrapf():%+v\n", err)
 }
