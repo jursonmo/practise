@@ -1,4 +1,4 @@
-package gox
+package taskgo
 
 import (
 	"context"
@@ -19,8 +19,9 @@ const (
 // 应该是再结束一个任务时，就要保证其下的goroutine的能正常地在规定的时间
 // 退出,否则就打印error, 开发人员提前去查问题。
 type TaskGo struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc //取消任务时默认都调用context.CancelFunc
+	canceFunc func()             //用户自定义自己取消任务的handler,
 	//wg       sync.WaitGroup
 	//tasks    sync.Map
 	tasks map[string]*Result
@@ -39,6 +40,10 @@ func NewTaskGo(ctx context.Context) *TaskGo {
 	tg := &TaskGo{doneCh: make(chan struct{}, 1)}
 	tg.ctx, tg.cancel = context.WithCancel(ctx)
 	return tg
+}
+
+func (tg *TaskGo) SetCancelFunc(f func()) {
+	tg.canceFunc = f
 }
 
 func (tg *TaskGo) Stop() {
@@ -124,7 +129,9 @@ func (tg *TaskGo) StopAndWait(d time.Duration) error {
 	}
 	tg.Stop()
 	tg.cancel()
-
+	if tg.canceFunc != nil {
+		tg.canceFunc()
+	}
 	select {
 	case <-time.After(d):
 		//stop的期限到了，goroutine没有全部退出，把没有退出的goroutine 输出
