@@ -54,7 +54,7 @@ func WithHandler(handler ConnHandler) ServerOption {
 	}
 }
 
-//底层都是tcp listener, 如果是tls, 用原始tcp listener 和tlsConfig 生成新的tls listener: tls.NewListener(l, tlsConfig), 同样是net.Listener
+// 底层都是tcp listener, 如果是tls, 用原始tcp listener 和tlsConfig 生成新的tls listener: tls.NewListener(l, tlsConfig), 同样是net.Listener
 func NewServer(addrs []string, options ...ServerOption) (*Server, error) {
 	s := &Server{}
 	for _, opt := range options {
@@ -97,8 +97,8 @@ func NewServer(addrs []string, options ...ServerOption) (*Server, error) {
 	}
 
 	if s.tlsConf != nil && s.tlsConf.CipherSuites == nil {
-		//s.tlsConf.CipherSuites = NO_DES
-		s.tlsConf.CipherSuites = SecureCipherSuites()
+		//s.tlsConf.CipherSuites = NO_DES //go早起版本，tlsConf.CipherSuites 默认会包含DES 这种不安全加密方式。所以这里指定“NO_DES”
+		s.tlsConf.CipherSuites = SecureCipherSuites() //tls.InsecureCipherSuites() 包含不安全的加密套件, 可以查看这些不安全的套件是哪些
 	}
 	return s, nil
 }
