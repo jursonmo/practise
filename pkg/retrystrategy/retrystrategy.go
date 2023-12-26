@@ -11,7 +11,7 @@ import (
 
 type RetryStrategyer interface {
 	Retryable() bool
-	Tried() int               //how many time have tried
+	Tried() int               //how many times have tried
 	RetryTime() time.Duration //重试了多久，即距离上次resetAt 多长时间了
 	MaxRetry() int
 	backoffx.Backoffer
@@ -27,7 +27,7 @@ type RetryStrategy struct {
 	backoff  backoffx.Backoffer
 }
 
-//maxRetry == 0 means not limit
+// maxRetry == 0 means not limit
 func NewRetryStrategy(maxRetry int, backoff backoffx.Backoffer) RetryStrategyer {
 	return &RetryStrategy{maxRetry: maxRetry, backoff: backoff}
 }
@@ -41,7 +41,7 @@ func (r *RetryStrategy) Retryable() bool {
 	return true
 }
 
-//next Duration
+// next Duration
 func (r *RetryStrategy) Duration() time.Duration {
 	r.Lock()
 	defer r.Unlock()
@@ -84,13 +84,16 @@ func (r *RetryStrategy) MaxRetry() int {
 //连续多次收不到心跳回应，就认为网络断开。
 //这样做的目的是不想心跳报文占用过多的网络资源，同时又能快速探测出网络是否断开
 type HeartbeatBackoff struct {
-	intvl     time.Duration
-	failIntvl time.Duration // smaller than intvl
-	failRetry bool
+	sync.Mutex //当前用到RetryStrategy是可以不用加锁的，RetryStrategy里已经加锁了，如果HeartbeatBackoff用到别的地方呢？所以这里还是加锁吧
+	intvl      time.Duration
+	failIntvl  time.Duration // smaller than intvl
+	failRetry  bool
 }
 
-//第一次获取next Duration, 返回正常情况下的间隔时间
+// 第一次获取next Duration, 返回正常情况下的间隔时间
 func (hb *HeartbeatBackoff) Duration() time.Duration {
+	hb.Lock()
+	defer hb.Unlock()
 	if hb.failRetry {
 		return hb.failIntvl
 	}
@@ -98,8 +101,10 @@ func (hb *HeartbeatBackoff) Duration() time.Duration {
 	return hb.intvl
 }
 
-//每次收到心跳回应后，都要调用reset(), 然后再调用Duration()来获取下次发送心跳的间隔时间。
+// 每次收到心跳回应后，都要调用reset(), 然后再调用Duration()来获取下次发送心跳的间隔时间。
 func (hb *HeartbeatBackoff) Reset() {
+	hb.Lock()
+	defer hb.Unlock()
 	hb.failRetry = false
 }
 

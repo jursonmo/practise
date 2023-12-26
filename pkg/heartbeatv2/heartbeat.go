@@ -110,9 +110,9 @@ func (t *timerx) Done() <-chan time.Time {
 	return t.timer.C
 }
 
-//1. NewHeartbeart(config), with OnFail, with OnSuccess
-//2. hb.RecvResp() -->channel
-//3. hb.Run --> recvResp, call OnSuccess if recvRespon succesfully, call OnFail
+// 1. NewHeartbeart(config), with OnFail, with OnSuccess
+// 2. hb.RecvResp() -->channel
+// 3. hb.Run --> recvResp, call OnSuccess if recvRespon succesfully, call OnFail
 func (hb *Heartbeat) Start(ctx context.Context) error {
 	if hb.err != nil {
 		return hb.err
@@ -148,7 +148,7 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 			//这里表示心跳超时
 			if !hb.rs.Retryable() {
 				hb.onTimeout(hb.name, hb.rs.RetryTime())
-				hb.err = fmt.Errorf("hb:%s timeout:%v", hb.name, hb.rs.RetryTime())
+				hb.err = fmt.Errorf("hb:%s timeout:%v, tried %d times", hb.name, hb.rs.RetryTime(), hb.rs.Tried())
 				return hb.err
 			}
 			hb.onFlyReq.Seq++
