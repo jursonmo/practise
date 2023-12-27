@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -17,11 +18,32 @@ import (
 // TCP_KEEPCNT                                 = 0x6
 // TCP_KEEPIDLE                                = 0x4
 // TCP_KEEPINTVL                               = 0x5
+const (
+	REQUEST  = 0
+	RESPONSE = 1
+)
 
 type HbPkg struct {
 	T   byte //type
 	Seq uint32
 	Ts  time.Duration
+}
+
+func (hbp *HbPkg) IsResponse() bool {
+	return hbp.T == RESPONSE
+}
+
+func (hbp *HbPkg) IsRequest() bool {
+	return hbp.T == REQUEST
+}
+
+func (hbp *HbPkg) GenResponse() []byte {
+	if !hbp.IsRequest() {
+		return nil
+	}
+	hbp.T = RESPONSE
+	d, _ := json.Marshal(hbp)
+	return d
 }
 
 type Heartbeat struct {
@@ -30,15 +52,14 @@ type Heartbeat struct {
 	name     string
 	rs       retrystrategy.RetryStrategyer
 	rrt      time.Duration //心跳的rrt round-trip time
-	respChan chan HbPkg
+	pktChan  chan HbPkg
 	startSeq uint32
 	onFlyReq HbPkg
-	failCnt  int
 	err      error
 
-	send      func(req HbPkg) error
-	onSuccess func(name string, ttl time.Duration)  //收到心跳回应
-	onTimeout func(name string, dead time.Duration) //dead 表示死了多久，即多久没有收到心跳
+	send       func(req []byte) error
+	onResponse func(name string, ttl time.Duration)  //收到心跳回应是的回调
+	onTimeout  func(name string, dead time.Duration) //dead 表示死了多久，即多久没有收到心跳
 
 }
 type HbOption func(*Heartbeat)
@@ -49,9 +70,9 @@ func WithOnTimout(f func(string, time.Duration)) HbOption {
 	}
 }
 
-func WithSuccessHandler(f func(string, time.Duration)) HbOption {
+func WithResponseHandler(f func(string, time.Duration)) HbOption {
 	return func(h *Heartbeat) {
-		h.onSuccess = f
+		h.onResponse = f
 	}
 }
 
@@ -62,11 +83,12 @@ func WithStartSeq(start uint32) HbOption {
 }
 
 // retrystrategy.DefaultHbRetryStrategyer
-func NewHeartbeat(name string, rs retrystrategy.RetryStrategyer, sendRequest func(HbPkg) error, opts ...HbOption) *Heartbeat {
-	if sendRequest == nil {
+// send 函数用来发送请求，同时可以用来发送回应数据。
+func NewHeartbeat(name string, rs retrystrategy.RetryStrategyer, send func([]byte) error, opts ...HbOption) *Heartbeat {
+	if send == nil {
 		return nil
 	}
-	hb := &Heartbeat{name: name, rs: rs, send: sendRequest, respChan: make(chan HbPkg, 2)}
+	hb := &Heartbeat{name: name, rs: rs, send: send, pktChan: make(chan HbPkg, 2)}
 	hb.startSeq = rand.Uint32()
 	for _, opt := range opts {
 		opt(hb)
@@ -76,12 +98,18 @@ func NewHeartbeat(name string, rs retrystrategy.RetryStrategyer, sendRequest fun
 	return hb
 }
 
-func (hb *Heartbeat) PutResponse(p HbPkg) {
-	select {
-	case hb.respChan <- p:
-	default:
-		log.Printf("drop hb HbPkg:%v", p)
+func (hb *Heartbeat) PutHbData(d []byte) error {
+	p := HbPkg{}
+	err := json.Unmarshal(d, &p)
+	if err != nil {
+		return err
 	}
+	select {
+	case hb.pktChan <- p:
+	default:
+		return fmt.Errorf("pktChan full and drop hb HbPkg:%v", p)
+	}
+	return nil
 }
 
 type timerx struct {
@@ -121,6 +149,9 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 	timer := NewTimerx(hb.rs.Duration())
 	defer timer.Stop()
 
+	//一开始先发请求
+	hb.sendRequest()
+
 	for {
 		//always check ctx first
 		if err := hb.ctx.Err(); err != nil {
@@ -132,34 +163,54 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 		case <-hb.ctx.Done():
 			hb.err = hb.ctx.Err()
 			return hb.err
-		case p := <-hb.respChan:
+		case p := <-hb.pktChan:
+			if p.IsRequest() {
+				//回应心跳请求
+				data := p.GenResponse()
+				hb.send(data)
+				continue
+			}
+			//handle response
 			if p.Seq != hb.onFlyReq.Seq {
 				continue
 			}
 			//ok, reset
-			hb.failCnt = 0
-			hb.rs.Reset()
-			timer.Reset(hb.rs.Duration()) //确保定时器重置
+			hb.rs.Reset()                 //重置“重试策略”
+			timer.Reset(hb.rs.Duration()) //确保定时器重置，重置的时间是由“重试策略”决定的重试间隔。
 			hb.rrt = timex.Since(p.Ts)
-			if hb.onSuccess != nil {
-				hb.onSuccess(hb.name, hb.rrt)
+			if hb.onResponse != nil {
+				hb.onResponse(hb.name, hb.rrt)
 			}
 		case <-timer.Done():
 			//这里表示心跳超时
 			if !hb.rs.Retryable() {
-				hb.onTimeout(hb.name, hb.rs.RetryTime())
+				if hb.onTimeout != nil {
+					hb.onTimeout(hb.name, hb.rs.RetryTime())
+				}
 				hb.err = fmt.Errorf("hb:%s timeout:%v, tried %d times", hb.name, hb.rs.RetryTime(), hb.rs.Tried())
 				return hb.err
 			}
-			hb.onFlyReq.Seq++
-			hb.onFlyReq.Ts = timex.Now()
-			err := hb.send(hb.onFlyReq)
-			if err != nil {
-				log.Println(err)
-			}
+			//定期器到了, 发送心跳请求
+			hb.sendRequest()
 			timer.Reset(hb.rs.Duration())
 		}
 	}
+}
+
+func (hb *Heartbeat) sendRequest() error {
+	hb.onFlyReq.T = REQUEST
+	hb.onFlyReq.Seq++
+	hb.onFlyReq.Ts = timex.Now()
+	d, err := json.Marshal(&hb.onFlyReq)
+	if err != nil {
+		hb.err = err
+		return hb.err
+	}
+	err = hb.send(d)
+	if err != nil {
+		log.Println(err)
+	}
+	return err
 }
 
 func (hb *Heartbeat) IsFail() bool {
