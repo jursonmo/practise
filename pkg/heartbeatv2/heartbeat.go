@@ -51,17 +51,17 @@ type Heartbeat struct {
 
 	name     string
 	rs       retrystrategy.RetryStrategyer
-	rrt      time.Duration //心跳的rrt round-trip time
+	rtt      time.Duration //心跳的rtt round-trip time
 	pktChan  chan HbPkg
 	startSeq uint32
 	onFlyReq HbPkg
 	err      error
 
 	send       func(req []byte) error
-	onResponse func(name string, ttl time.Duration)  //收到心跳回应是的回调
+	onResponse func(name string, rtt time.Duration)  //收到心跳回应是的回调
 	onTimeout  func(name string, dead time.Duration) //dead 表示死了多久，即多久没有收到心跳
-
 }
+
 type HbOption func(*Heartbeat)
 
 func WithOnTimout(f func(string, time.Duration)) HbOption {
@@ -146,7 +146,9 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 		return hb.err
 	}
 	hb.ctx = ctx
-	timer := NewTimerx(hb.rs.Duration())
+	next := hb.rs.Duration()
+	log.Printf("new timer for Duration:%v", next)
+	timer := NewTimerx(next)
 	defer timer.Stop()
 
 	//一开始先发请求
@@ -172,14 +174,16 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 			}
 			//handle response
 			if p.Seq != hb.onFlyReq.Seq {
+				log.Printf("-------recv seq:%d, but hb.onFlyReq.Seq:%d\n", p.Seq, hb.onFlyReq.Seq)
 				continue
 			}
+			//log.Println("-------recv response ok -------")
 			//ok, reset
 			hb.rs.Reset()                 //重置“重试策略”
 			timer.Reset(hb.rs.Duration()) //确保定时器重置，重置的时间是由“重试策略”决定的重试间隔。
-			hb.rrt = timex.Since(p.Ts)
+			hb.rtt = timex.Since(p.Ts)
 			if hb.onResponse != nil {
-				hb.onResponse(hb.name, hb.rrt)
+				hb.onResponse(hb.name, hb.rtt)
 			}
 		case <-timer.Done():
 			//这里表示心跳超时
@@ -190,14 +194,17 @@ func (hb *Heartbeat) Start(ctx context.Context) error {
 				hb.err = fmt.Errorf("hb:%s timeout:%v, tried %d times", hb.name, hb.rs.RetryTime(), hb.rs.Tried())
 				return hb.err
 			}
-			//定期器到了, 发送心跳请求
+			//定期器到了, 需要发送心跳请求来检测链路了
 			hb.sendRequest()
-			timer.Reset(hb.rs.Duration())
+			next := hb.rs.Duration()
+			timer.Reset(next)
 		}
 	}
 }
 
 func (hb *Heartbeat) sendRequest() error {
+	//打印距离上次发送请求经过了多长时间
+	//log.Printf("-------sendRequest, since last request:%v\n", timex.Since(hb.onFlyReq.Ts))
 	hb.onFlyReq.T = REQUEST
 	hb.onFlyReq.Seq++
 	hb.onFlyReq.Ts = timex.Now()
@@ -208,7 +215,7 @@ func (hb *Heartbeat) sendRequest() error {
 	}
 	err = hb.send(d)
 	if err != nil {
-		log.Println(err)
+		log.Printf("send hb Request err:%v\n", err)
 	}
 	return err
 }
