@@ -1,0 +1,8 @@
+{
+    "ServiceName": "xxxServiceName",
+    "Mode": "file",
+    "Path": "logd",
+    "Level": "info",
+    "Compress": false,
+    "KeepDays": 3
+}
