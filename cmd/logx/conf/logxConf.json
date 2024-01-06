@@ -4,5 +4,6 @@
     "Path": "logd",
     "Level": "info",
     "Compress": false,
-    "KeepDays": 3
+    "KeepDays": 3,
+    "Rotation": "daliy"
 }

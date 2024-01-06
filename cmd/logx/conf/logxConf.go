@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -10,15 +9,29 @@ import (
 	"go.uber.org/zap"
 )
 
+func parseJSONConfig(config *logx.LogConf, path string) error {
+	file, err := os.Open(path) // For read access.
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return json.NewDecoder(file).Decode(config)
+}
+
 func main() {
 	var c logx.LogConf
-	file, err := os.Open("./logxConf.json")
+	// file, err := os.Open("./logxConf.json")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// de := json.NewDecoder(file)
+	// de.Decode(&c)
+	// fmt.Printf("%#v\n", c)
+	err := parseJSONConfig(&c, "./logxConf.json")
 	if err != nil {
 		panic(err)
 	}
-	de := json.NewDecoder(file)
-	de.Decode(&c)
-	fmt.Printf("%#v\n", c)
 
 	if err := logx.SetUp(c); err != nil {
 		panic(err)
