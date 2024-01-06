@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/zero-contrib/logx/zapx"
 	"go.uber.org/zap"
 )
 
@@ -36,12 +35,15 @@ func main() {
 	if err := logx.SetUp(c); err != nil {
 		panic(err)
 	}
-
-	writer, err := zapx.NewZapWriter(zap.WithCaller(false)) //zap.WithCaller(false) 禁用caller, 避免日志里打印两个caller
+	//如果使用了zap Writer, 就无法实现配置里的日志切割等功能，
+	//日志切割的功能是在fw:= newFileWriter(c)里实现，实现完后logx.SetWriter(fw)
+	//也就是如果这里设置了logx.SetWriter(zapwriter)，只能在zapwriter里实现日志切割等功能
+	//zapwriter, err := zapx.NewZapWriter(zap.WithCaller(false)) //zap.WithCaller(false) 禁用caller, 避免日志里打印两个caller
+	zapwriter, err := NewZapWriter(c.Path+".log", zap.WithCaller(false))
 	if err != nil {
 		panic(err)
 	}
-	logx.SetWriter(writer)
+	logx.SetWriter(zapwriter)
 
 	logx.Info("info")
 	logx.Infof("infof:%v", 123)
