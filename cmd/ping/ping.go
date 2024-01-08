@@ -25,6 +25,7 @@ panic: listen ip4:icmp : socket: operation not permitted
 https://github.com/go-ping/ping/blob/master/README.md#linux
 This library attempts to send an "unprivileged" ping via UDP. On Linux, this must be enabled with the following sysctl command:
 README.md 说在linux , 默认是通过udp 来ping, 但是通过抓包看，是icmp, 不管是否设置 pinger.SetPrivileged()
+(莫：可能这里的UDP 指的是syscall.SOCK_DGRAM， 默认用udp;  icmp-->icmp.ListenPacket("ipv4:icmp",...) 用原始套接字，需要root 权限)
 */
 
 var (
