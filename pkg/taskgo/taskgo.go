@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	TaskAdding = 1
-	Stoped     = 2
+	Stoped = 2
 )
 
 // 一个任务也容易就起几个goroutine去完成, 但是这个stop 这个任务，需要知道哪些goroutine已经
@@ -22,22 +21,22 @@ type TaskGo struct {
 	ctx       context.Context
 	cancel    context.CancelFunc //取消任务时默认都调用context.CancelFunc
 	canceFunc func()             //用户自定义自己取消任务的handler,
-	//wg       sync.WaitGroup
-	//tasks    sync.Map
-	tasks map[string]*Result
+	tasks     map[string]*TaskState
 	sync.Mutex
 	status   int32
 	tasksNum int32
-	doneCh   chan struct{}
+	doneCh   chan struct{} // notfiy when all tasks are done
 }
-type Result struct {
+
+type TaskState struct {
 	TaskName string
+	StartAt  time.Time
 	DoneAt   time.Time
 	Err      error
 }
 
 func NewTaskGo(ctx context.Context) *TaskGo {
-	tg := &TaskGo{doneCh: make(chan struct{}, 1)}
+	tg := &TaskGo{tasks: make(map[string]*TaskState), doneCh: make(chan struct{}, 1)}
 	tg.ctx, tg.cancel = context.WithCancel(ctx)
 	return tg
 }
@@ -62,43 +61,35 @@ func (tg *TaskGo) isStoped() bool {
 	return tg.status == Stoped
 }
 
-// func (tg *TaskGo) incr() {
-// 	atomic.AddInt32(&tg.tasksNum, 1)
-// }
-
-// func (tg *TaskGo) decr() {
-// 	atomic.AddInt32(&tg.tasksNum, -1)
-// }
-
-func (tg *TaskGo) Go(name string, f func(ctx context.Context) error) error {
+func (tg *TaskGo) Go(taskName string, f func(ctx context.Context) error) error {
 	tg.Lock()
 	defer tg.Unlock()
 
 	if tg.isStoped() {
-		return errors.New("stoped")
+		return errors.New("taskgo is stoped")
 	}
 
-	_, b := tg.tasks[name]
+	_, b := tg.tasks[taskName]
 	if b {
-		return fmt.Errorf("task:%s already running", name)
+		return fmt.Errorf("task:%s already running", taskName)
 	}
-	r := &Result{TaskName: name}
-	tg.tasks[name] = r
+	ts := &TaskState{TaskName: taskName, StartAt: time.Now()}
+	tg.tasks[taskName] = ts
 	tg.tasksNum += 1
 
 	go func() {
 		err := f(tg.ctx)
-		tg.done(r, err)
+		tg.done(ts, err)
 	}()
 	return nil
 }
 
-func (tg *TaskGo) done(r *Result, err error) {
+func (tg *TaskGo) done(ts *TaskState, err error) {
 	tg.Lock()
 	defer tg.Unlock()
 	//log.Printf("goroutine:%v finish\n", r.TaskName)
-	r.Err = err
-	r.DoneAt = time.Now()
+	ts.Err = err
+	ts.DoneAt = time.Now()
 
 	tg.tasksNum -= 1
 	if tg.tasksNum < 0 {
@@ -111,13 +102,59 @@ func (tg *TaskGo) done(r *Result, err error) {
 	}
 }
 
-func (tg *TaskGo) unfinishTasks() []string {
+func (ts *TaskState) unCompleted() bool {
+	return ts.DoneAt.IsZero() //没有结束，DoneAt 为“0”
+}
+
+func (tg *TaskGo) UnfinishedTasksName() []string {
+	return tg.iterTasks(func(ts *TaskState) bool {
+		return ts.unCompleted()
+	})
+}
+
+func (tg *TaskGo) FinishedTasksName() []string {
+	return tg.iterTasks(func(ts *TaskState) bool {
+		return !ts.unCompleted()
+	})
+}
+
+func (tg *TaskGo) AllTasksName() []string {
+	return tg.iterTasks(func(ts *TaskState) bool {
+		return ts != nil
+	})
+}
+
+func (tg *TaskGo) iterTasks(condition func(ts *TaskState) bool) []string {
 	tg.Lock()
 	defer tg.Unlock()
 	tasks := make([]string, 0, len(tg.tasks))
-	for name, r := range tg.tasks {
-		if r.DoneAt.IsZero() {
+	for name, ts := range tg.tasks {
+		if condition(ts) {
 			tasks = append(tasks, name)
+		}
+	}
+	return tasks
+}
+
+func (tg *TaskGo) UnfinishedTasksState() []TaskState {
+	return tg.iterTasksState(func(ts *TaskState) bool {
+		return ts.unCompleted()
+	})
+}
+
+func (tg *TaskGo) FinishedTasksState() []TaskState {
+	return tg.iterTasksState(func(ts *TaskState) bool {
+		return !ts.unCompleted()
+	})
+}
+
+func (tg *TaskGo) iterTasksState(condition func(ts *TaskState) bool) []TaskState {
+	tg.Lock()
+	defer tg.Unlock()
+	tasks := make([]TaskState, 0, len(tg.tasks))
+	for _, ts := range tg.tasks {
+		if condition(ts) {
+			tasks = append(tasks, *ts)
 		}
 	}
 	return tasks
@@ -125,7 +162,7 @@ func (tg *TaskGo) unfinishTasks() []string {
 
 func (tg *TaskGo) StopAndWait(d time.Duration) error {
 	if tg.IsStoped() {
-		return errors.New("stoped")
+		return errors.New("already stoped")
 	}
 	tg.Stop()
 	tg.cancel()
@@ -135,7 +172,7 @@ func (tg *TaskGo) StopAndWait(d time.Duration) error {
 	select {
 	case <-time.After(d):
 		//stop的期限到了，goroutine没有全部退出，把没有退出的goroutine 输出
-		tasks := tg.unfinishTasks()
+		tasks := tg.UnfinishedTasksName()
 		return fmt.Errorf("unfinish tasks:%v", tasks)
 	case <-tg.doneCh:
 		//task下的所有goroutine都已经退出了
