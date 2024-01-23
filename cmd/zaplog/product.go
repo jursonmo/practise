@@ -22,12 +22,11 @@ func main() {
 		StacktraceKey:  "stacktrace",
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    zapcore.LowercaseLevelEncoder,
-		EncodeTime:     zapcore.RFC3339TimeEncoder, //zapcore.EpochTimeEncoder,
+		EncodeTime:     zapcore.RFC3339TimeEncoder, //zapcore.EpochTimeEncoder 效果是 "ts":1704423738.492447
 		EncodeDuration: zapcore.SecondsDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
 	c.OutputPaths = []string{"product.log", "stderr"}
-	//c.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	c.EncoderConfig = ec
 	logger1, _ := c.Build()
 	defer logger1.Sync()
