@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aceld/zinx/zconf"
 	"github.com/aceld/zinx/ziface"
 	"github.com/aceld/zinx/znet"
 )
@@ -19,7 +20,7 @@ func myHeartBeatMsg(conn ziface.IConnection) []byte {
 func myOnRemoteNotAlive(conn ziface.IConnection) {
 	fmt.Println("myOnRemoteNotAlive is Called, connID=", conn.GetConnID(), "remoteAddr = ", conn.RemoteAddr())
 	//关闭链接
-	conn.Stop()
+	conn.Stop() //这个会调用cancel, 最终会调用OnConnStop回调,stop heartbeat 和关闭底层连接conn.Close()
 }
 
 // User-defined method for handling heartbeat messages (用户自定义的心跳检测消息处理方法)
@@ -31,8 +32,17 @@ func (r *myHeartBeatRouter) Handle(request ziface.IRequest) {
 	fmt.Println("in MyHeartBeatRouter Handle, recv from client : msgId=", request.GetMsgID(), ", data=", string(request.GetData()))
 }
 
+func OnDisconnect(conn ziface.IConnection) {
+	fmt.Printf("disconect, conn:%v->%v", conn.LocalAddr(), conn.RemoteAddr())
+	//conn.Stop() //TODO:走到这里了，还需要Stop 吗？不需要, 因为连接断开才调用SetOnConnStop设置的回调onConnStop,
+	//(c *Connection) finalizer()会关闭底层连接-->callOnConnStop()->onConnStop()
+}
+
 func main() {
+	zconf.GlobalObject.HeartbeatMax = 10 //心跳超时时间10秒
 	s := znet.NewServer()
+
+	s.SetOnConnStop(OnDisconnect)
 
 	myHeartBeatMsgID := 88888
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aceld/zinx/zconf"
 	"github.com/aceld/zinx/ziface"
 	"github.com/aceld/zinx/znet"
 )
@@ -32,6 +33,7 @@ func (r *myClientHeartBeatRouter) Handle(request ziface.IRequest) {
 }
 
 func main() {
+	zconf.GlobalObject.HeartbeatMax = 10 //心跳超时时间10秒
 	client := znet.NewClient("127.0.0.1", 8999)
 
 	myHeartBeatMsgID := 88888
@@ -51,6 +53,8 @@ func main() {
 	}
 
 	restartChan := make(chan struct{})
+
+	//连接断开只会执行一次onStop, 所以在这里通知业务层是否要重连
 	onStop := func(c ziface.IConnection) {
 		isConneted = false
 		fmt.Printf("stop cid:%d\n", c.GetConnID())
