@@ -17,13 +17,15 @@ func main() {
 	taskMgr.Go("tasksleep1", func(ctx context.Context) error {
 		time.Sleep(time.Second)
 		log.Println("tasksleep1 finished")
-		return nil
+		return nil //这样在后面FinishedTasksState()打印那里，tasksleep1的Err为nil
 	})
-	taskMgr.Go("tasksleep2", func(ctx context.Context) error {
+	taskMgr.GoSafe("tasksleep2", func(ctx context.Context) error {
 		time.Sleep(time.Second * 2)
 		log.Println("tasksleep2 finished")
+		log.Panic("panic_in_tasksleep2") //这样在后面FinishedTasksState()打印那里，tasksleep2的Err不为空了
 		return nil
 	})
+
 	taskMgr.Go("tasksleep4", func(ctx context.Context) error {
 		time.Sleep(time.Second * 4)
 		log.Println("tasksleep4 finished")

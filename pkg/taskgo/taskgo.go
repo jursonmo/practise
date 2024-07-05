@@ -61,6 +61,28 @@ func (tg *TaskGo) isStoped() bool {
 	return tg.status == Stoped
 }
 
+var PanicError = errors.New("TaskGoPanicError")
+
+func (tg *TaskGo) GoSafe(taskName string, f func(ctx context.Context) error) error {
+	//为了安全的运行f, panic 也不会导致整个进程挂掉, 包装下f, 加入recover, 当发送panic, 就返回一个err,底层是
+	safeF := func(ctx context.Context) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				//panic("mypanicTest"), recover()捕捉到是一个字符串;panic(errors.New("mypanicTest")),recover()捕捉到是一个error
+				//如果recover 捕捉到的是一个error,那么就用这个error来返回, 否则用底层是PanicError 的error来代替
+				if v, ok := r.(error); ok {
+					err = v
+					return
+				}
+				err = fmt.Errorf("recover:%v, err:%w", r, PanicError) //上层业务可以用errors.Is(err, PanicError)来判断
+				return
+			}
+		}()
+		return f(ctx)
+	}
+	return tg.Go(taskName, safeF)
+}
+
 func (tg *TaskGo) Go(taskName string, f func(ctx context.Context) error) error {
 	tg.Lock()
 	defer tg.Unlock()
