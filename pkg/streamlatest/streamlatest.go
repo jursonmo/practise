@@ -10,6 +10,7 @@ import (
 type StreamLatest struct {
 	sync.RWMutex
 	ctx         context.Context
+	cancel      context.CancelFunc
 	streamName  string
 	addr        string
 	redisClient *redis.Client
@@ -19,7 +20,14 @@ func NewStreamLatest(ctx context.Context, stream, addr string) *StreamLatest {
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
 	})
-	return &StreamLatest{ctx: ctx, streamName: stream, addr: addr, redisClient: client}
+	ctx, cancel := context.WithCancel(ctx)
+	return &StreamLatest{ctx: ctx, cancel: cancel, streamName: stream, addr: addr, redisClient: client}
+}
+
+func (s *StreamLatest) Stop() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 }
 
 func (s *StreamLatest) GetLatestMsg() (*redis.XMessage, error) {
