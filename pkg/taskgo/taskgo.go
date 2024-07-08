@@ -170,6 +170,12 @@ func (tg *TaskGo) FinishedTasksState() []TaskState {
 	})
 }
 
+func (tg *TaskGo) ErrorTasksState() []TaskState {
+	return tg.iterTasksState(func(ts *TaskState) bool {
+		return !ts.unCompleted() && ts.Err != nil //结束了，但是有错误的任务
+	})
+}
+
 func (tg *TaskGo) iterTasksState(condition func(ts *TaskState) bool) []TaskState {
 	tg.Lock()
 	defer tg.Unlock()
@@ -195,10 +201,9 @@ func (tg *TaskGo) StopAndWait(d time.Duration) error {
 	case <-time.After(d):
 		//stop的期限到了，goroutine没有全部退出，把没有退出的goroutine 输出
 		tasks := tg.UnfinishedTasksName()
-		return fmt.Errorf("unfinish tasks:%v", tasks)
+		return fmt.Errorf("stop all task err,unfinish tasks:%v", tasks)
 	case <-tg.doneCh:
 		//task下的所有goroutine都已经退出了
 		return nil
 	}
-	return nil
 }
