@@ -2,6 +2,8 @@ package singletask
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 const (
 	resultKey = "result"
 )
+
+var TaskPanicError = errors.New("taskPanic")
 
 type SingleTask struct {
 	sync.Mutex
@@ -27,8 +31,8 @@ type SingleTask struct {
 	promise *Promise
 }
 
-//type TaskFunc func(context.Context) interface{}
-//type TaskFunc func(ctx context.Context, args ...interface{}) error
+// type TaskFunc func(context.Context) interface{}
+// type TaskFunc func(ctx context.Context, args ...interface{}) error
 type TaskFunc func(context.Context) error
 type TaskResultHandler func(interface{}) //task result handler, should be unblock
 
@@ -37,7 +41,7 @@ func New(ctx context.Context) *SingleTask {
 	return &SingleTask{ctx: ctx, cancel: cancel, resultCh: make(chan interface{}, 1)}
 }
 
-//close singetask, and the singleTask can't be put new task
+// close singetask, and the singleTask can't be put new task
 func (st *SingleTask) Close() {
 	st.Lock()
 	defer st.Unlock()
@@ -46,7 +50,7 @@ func (st *SingleTask) Close() {
 	}
 }
 
-//close singetask and wait task quit, and the singleTask can't be put new task
+// close singetask and wait task quit, and the singleTask can't be put new task
 func (st *SingleTask) CloseAndWait() {
 	st.Lock()
 	defer st.Unlock()
@@ -56,7 +60,7 @@ func (st *SingleTask) CloseAndWait() {
 	}
 }
 
-//just cancel current running task and wait task end, the singelTask can still put a new task
+// just cancel current running task and wait task end, the singelTask can still put a new task
 func (st *SingleTask) CancelTask() {
 	st.Lock()
 	defer st.Unlock()
@@ -91,12 +95,17 @@ func (st *SingleTask) IsTaskRunning() bool {
 
 // resultHandlers will be invoked each time when f return
 func (st *SingleTask) PutTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {
-	return st.putTask(f, resultHandlers...)
+	return st.putTask(f, false, resultHandlers...)
 }
 
-//PutTaskPromise: if f return a non-nil err, means f fail, will retry
-//intvl: call f interval time at least
-//resultHandlers will be invoked each time when f return
+// resultHandlers will be invoked each time when f return; it will recover when f() panic
+func (st *SingleTask) PutTaskSafe(f TaskFunc, resultHandlers ...TaskResultHandler) error {
+	return st.putTask(f, true, resultHandlers...)
+}
+
+// PutTaskPromise: if f return a non-nil err, means f fail, will retry
+// intvl: call f interval time at least
+// resultHandlers will be invoked each time when f return
 func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHandlers ...TaskResultHandler) error {
 	promiseWrapFunc := func(ctx context.Context) error {
 		if st.promise != nil {
@@ -106,10 +115,11 @@ func (st *SingleTask) PutTaskPromise(f TaskFunc, intvl time.Duration, resultHand
 		}
 		return st.promise.Call(f, resultHandlers...).Error()
 	}
-	return st.putTask(promiseWrapFunc)
+	return st.putTask(promiseWrapFunc, false)
 }
 
-func (st *SingleTask) putTask(f TaskFunc, resultHandlers ...TaskResultHandler) error {
+// runSafe means it will recover when f called panic
+func (st *SingleTask) putTask(f TaskFunc, runSafe bool, resultHandlers ...TaskResultHandler) error {
 	st.Lock()
 	defer st.Unlock()
 
@@ -125,6 +135,19 @@ func (st *SingleTask) putTask(f TaskFunc, resultHandlers ...TaskResultHandler) e
 	st.taskCtx, st.taskCancel = witchCancelResult(st.ctx, st.resultCh)
 	//用参数传入st.taskCtx, 确保goroutine func 运行时，f 用的是当前指定的st.taskCtx, 如果是闭包，有可能f 用的是后来新创建st.taskCtx
 	go func(ctx context.Context) {
+		if runSafe {
+			var err error
+			if r := recover(); r != nil {
+				if v, ok := r.(error); ok {
+					err = v
+				} else {
+					err = fmt.Errorf("recover:%v, err:%w", r, TaskPanicError)
+				}
+				for _, resultHandler := range st.resultHandlers {
+					resultHandler(err)
+				}
+			}
+		}
 		result := f(ctx)
 		for _, resultHandler := range st.resultHandlers {
 			resultHandler(result)
