@@ -38,8 +38,8 @@ type options struct {
 	dedupe   bool //是否消息去重
 }
 
-//fixbug:
-//func (o options) check() {
+// fixbug:
+// func (o options) check() {
 func (o *options) check() {
 	if o.size <= 0 {
 		o.size = 128
@@ -113,12 +113,12 @@ var (
 )
 
 func NewMsg(key string, val interface{}) *Msg {
-	//todo:
+	//todo: 分配消息对象，可以考虑，synPool
 	return &Msg{key: key, val: val, done: make(chan struct{}, 1)}
 }
 
 func NewMsgAsyn(key string, val interface{}) *Msg {
-	//todo:
+	//todo: 分配消息对象，可以考虑，synPool
 	return &Msg{key: key, val: val}
 }
 
@@ -130,7 +130,7 @@ func (m *Msg) Value() interface{} {
 	return m.val
 }
 
-//wait for msg complete
+// wait for msg complete
 func (m *Msg) Wait() error {
 	defer m.Release()
 	if m.done != nil {
@@ -213,12 +213,12 @@ func (b *Batcher) Addx(key string, val interface{}, sync bool) error {
 	return msg.Wait()
 }
 
-//同步, 阻塞,等待处理结果
+// 同步, 阻塞,等待处理结果
 func (b *Batcher) Add(key string, val interface{}) error {
 	return b.Addx(key, val, true)
 }
 
-//异步，直接返回
+// 异步，直接返回
 func (b *Batcher) AddAsyn(key string, val interface{}) error {
 	return b.Addx(key, val, false)
 }
@@ -315,49 +315,49 @@ func (b *Batcher) merge(idx int, ch <-chan *Msg) {
 }
 
 /*
-type BatcherTask struct {
-	// ctx     context.Context
-	// intvl   time.Duration
-	batcher *Batcher
-	ready   chan struct{}
-}
+	type BatcherTask struct {
+		// ctx     context.Context
+		// intvl   time.Duration
+		batcher *Batcher
+		ready   chan struct{}
+	}
 
-func NewBatcherTask(b *Batcher) *BatcherTask {
-	return &BatcherTask{batcher: b, ready: make(chan struct{}, 1)}
-}
+	func NewBatcherTask(b *Batcher) *BatcherTask {
+		return &BatcherTask{batcher: b, ready: make(chan struct{}, 1)}
+	}
 
-func (b *Batcher) newBatcherTask(msgs map[string][]*Msg) {
-	t := time.NewTimer(b.opts.interval)
-	bt := NewBatcherTask(b)
-	go func() {
-	loop:
-		for {
-			select {
-			case <-t.C:
-				break loop
-			case <-bt.ready:
-				break loop
-			}
-		}
-		if len(msgs) > 0 {
-			//把msg 转成 map[string][]interface{}
-			data := make(map[string][]interface{})
-			for key, msgx := range msgs {
-				for _, msg := range msgx {
-					data[key] = append(data[key], msg.Value())
+	func (b *Batcher) newBatcherTask(msgs map[string][]*Msg) {
+		t := time.NewTimer(b.opts.interval)
+		bt := NewBatcherTask(b)
+		go func() {
+		loop:
+			for {
+				select {
+				case <-t.C:
+					break loop
+				case <-bt.ready:
+					break loop
 				}
 			}
-			err := b.exector.Do(b.ctx, data) // 不用管处理是否失败吗？
-			//反馈处理结果
-			for _, msgx := range msgs {
-				for _, msg := range msgx {
-					msg.Complete(err)
+			if len(msgs) > 0 {
+				//把msg 转成 map[string][]interface{}
+				data := make(map[string][]interface{})
+				for key, msgx := range msgs {
+					for _, msg := range msgx {
+						data[key] = append(data[key], msg.Value())
+					}
 				}
+				err := b.exector.Do(b.ctx, data) // 不用管处理是否失败吗？
+				//反馈处理结果
+				for _, msgx := range msgs {
+					for _, msg := range msgx {
+						msg.Complete(err)
+					}
+				}
+				msgs = make(map[string][]*Msg, b.opts.size)
 			}
-			msgs = make(map[string][]*Msg, b.opts.size)
-		}
-	}()
-}
+		}()
+	}
 */
 func (b *Batcher) Close() {
 	atomic.StoreInt32(&b.closed, 1) //避免channel加入新的消息，
@@ -377,7 +377,7 @@ func (b *Batcher) Stop() error {
 	return nil
 }
 
-//为了确保ch 的数据都处理完，这里再次做一次清理工作, 避免应用层永远阻塞等待消息处理结果
+// 为了确保ch 的数据都处理完，这里再次做一次清理工作, 避免应用层永远阻塞等待消息处理结果
 func (b *Batcher) clear() {
 	for _, ch := range b.chans {
 		for {
