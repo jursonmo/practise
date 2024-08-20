@@ -1,5 +1,6 @@
 package batcher
 
+//https://github.com/zhoushuguang/lebron/blob/main/pkg/batcher/batcher.go
 // 带有去重，同步发送（通知消息发送结果）
 import (
 	"context"
