@@ -41,6 +41,12 @@ func tracerProvider(url string) (*tracesdk.TracerProvider, error) {
 	return tp, nil
 }
 
+// 总结起来，就是
+// 1. 从上游的carrier 提取信息生成新的ctx
+// 2. 从这个新的ctx  tracer.Start() 生成新的span, 并在这个span设置SetAttributes
+// 3. Inject(ctx,carrier),把新的ctx信息注入到carrier, 传递下去。
+// 4. 下游服务收到carrier后，Extract(ctx,carrier) 生成新的ctx, 并在这个ctx上 tracer.Start()...以此循环
+
 // 模拟： 用链路跟踪来展示网络延迟时间，而不是程序处理时间
 func main() {
 	tp, err := tracerProvider("http://localhost:14268/api/traces")
