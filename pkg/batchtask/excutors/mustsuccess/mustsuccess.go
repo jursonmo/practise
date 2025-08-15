@@ -2,6 +2,7 @@ package mustsuccess
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jursonmo/practise/pkg/backoffx"
@@ -35,6 +36,9 @@ func (ms *MustSuccess) Close() {}
 
 func (ms *MustSuccess) Do(ctx context.Context, batch []interface{}) error {
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err() //如果是上层ctx的错误, 则返回
+		}
 		start := time.Now()
 		err := ms.do(ctx, batch)
 		if err == nil {
@@ -42,7 +46,14 @@ func (ms *MustSuccess) Do(ctx context.Context, batch []interface{}) error {
 			return err
 		}
 
-		if IsContextErr(err) {
+		//ms.do 返回 context 错误的话, 还有确定是否是上层ctx的错误, 如果是, 则退出, 否则, 继续重试, 即只有上层ctx 错误时, 才退出重试
+		// if IsContextErr(err) {
+		// 	return err
+		// }
+
+		//判断是否是上层ctx的错误
+		if ctx.Err() != nil {
+			ms.err = err
 			return err
 		}
 		DelayAtLeast(ctx, start, ms.Duration())
@@ -64,13 +75,15 @@ func (ms *MustSuccess) Reset() {
 }
 
 func IsContextErr(err error) bool {
-	return err == context.Canceled || err == context.DeadlineExceeded
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return false
 }
 
 func DelayAtLeast(ctx context.Context, start time.Time, delayAtLeast time.Duration) {
 	//if 'start' is unset
-	none := time.Time{}
-	if start == none {
+	if start.IsZero() {
 		start = time.Now()
 	}
 

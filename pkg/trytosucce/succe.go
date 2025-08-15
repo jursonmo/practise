@@ -15,7 +15,7 @@ type MustSuccess struct {
 	quitErrs []error       //if f() return one of quitErrs, don't try to call f
 }
 
-var DefMustSuccess = NewMustSuccess(context.Background(), time.Second*5, []error{context.Canceled, context.DeadlineExceeded})
+var DefMustSuccess = NewMustSuccess(context.Background(), time.Second*5, nil)
 
 func NewMustSuccess(ctx context.Context, intvl time.Duration, errs []error) *MustSuccess {
 	return &MustSuccess{ctx: ctx, intvl: intvl, quitErrs: errs}
@@ -39,14 +39,28 @@ func (ms *MustSuccess) Call(f func(context.Context) error, errorHandlers ...Erro
 		for _, errorHandler := range errorHandlers {
 			errorHandler(err)
 		}
+
+		//两种情况会退出: 1. 是上层 context 错误, 则退出 2. 是使用者明确指定的 quitErrs 中的错误, 则退出
+		if ms.ctx.Err() != nil {
+			ms.err = err
+			return err
+		}
 		for _, quitErr := range ms.quitErrs {
 			if errors.Is(err, quitErr) {
 				ms.err = err
 				return ms.err
 			}
 		}
+
 		DelayCtx(ms.ctx, start, ms.intvl)
 	}
+}
+
+func IsContextErrs(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return false
 }
 
 func (ms *MustSuccess) Error() error {
