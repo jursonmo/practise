@@ -22,6 +22,8 @@ func main() {
 		fmt.Println(myerr)
 	}
 
+	fmt.Printf("root err:%v", getRootCause(err))
+	
 	testPkgerr()
 	testErrStack()
 }
@@ -48,4 +50,14 @@ func testErrStack() {
 
 	err = pkgerr.Wrapf(err, "my error:%s", "test")
 	fmt.Printf("-----pkgerr.Wrapf():%+v\n", err)
+}
+
+func getRootCause(err error) error {
+	for {
+		unwrapped := errors.Unwrap(err)
+		if unwrapped == nil {
+			return err
+		}
+		err = unwrapped
+	}
 }
