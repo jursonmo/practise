@@ -116,10 +116,13 @@ func (p *FastL2fwdProgram) RegisterL2fwdInfo(dstip net.IP, inif int, outif int, 
 	// if err := p.TxPort.Put(uint32(outif), uint32(outif)); err != nil {
 	// 	return fmt.Errorf("failed to update TxPort: %v, key=value=%d", err, outif)
 	// }
+
+	//设置struct bpf_map_def SEC("maps") txport_map, 这样下次数据到来是，直接在ebpf 直接调用bpf_redirect_map(&txport_map, ctx->ingress_ifindex, 0); 直接把数据发送到inif对应的outif
 	if err := p.TxPort.Put(uint32(inif), uint32(outif)); err != nil {
 		return fmt.Errorf("failed to update TxPort: %v, key=value=%d", err, outif)
 	}
 
+	//设置struct bpf_map_def SEC("maps") l2fwd_map, 这样下次数据到来是，直接在ebpf 根据 L2fwd map信息把数据报文的目的mac修改为fwd.DstMac, 并转发到outif
 	if err := p.L2fwd.Put(ip, unsafe.Pointer(&fwd)); err != nil {
 		return fmt.Errorf("failed to update L2fwd: %v", err)
 	}
@@ -158,6 +161,10 @@ func (p *FastL2fwdProgram) AttachDummyProgram(Ifindex int) error {
 	return attachProgram(Ifindex, p.DummyProg)
 }
 
+//	参考路径：github.com/networkop/xdp-xconnect@v0.0.0-20210308194118-1e1a8482c3bc/pkg/xdp/netlink.go
+//
+// forcing xdpgeneric for veth because https://www.netdevconf.org/0x13/session.html?talk-veth-xdp
+// tuntap also requires this probably for the same reasons
 func xdpFlags(linkType string) int {
 	if linkType == "veth" || linkType == "tuntap" {
 		return 2
@@ -171,7 +178,7 @@ func attachProgram(Ifindex int, program *ebpf.Program) error {
 	if err != nil {
 		return err
 	}
-	//return netlink.LinkSetXdpFdWithFlags(link, program.FD(), int(xdp.DefaultXdpFlags))
+	//return netlink.LinkSetXdpFdWithFlags(link, program.FD(), int(xdp.DefaultXdpFlags)) //用这个会失败。
 	return netlink.LinkSetXdpFdWithFlags(link, program.FD(), xdpFlags((link).Type()))
 }
 

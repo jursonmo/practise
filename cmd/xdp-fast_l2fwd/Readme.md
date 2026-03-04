@@ -36,3 +36,25 @@ See the Veth XDP: XDP for containers talk which describes the reasons behind thi
 */
 
 xdpgeneric 模式不需要veth peer attached XDP program, fast_l2fwd 就是用xdpgeneric 模式 才测试通过。
+
+```
+func attachProgram(Ifindex int, program *ebpf.Program) error {
+	link, err := netlink.LinkByIndex(Ifindex)
+	if err != nil {
+		return err
+	}
+	//return netlink.LinkSetXdpFdWithFlags(link, program.FD(), int(xdp.DefaultXdpFlags))
+	return netlink.LinkSetXdpFdWithFlags(link, program.FD(), xdpFlags((link).Type()))
+}
+
+//	参考路径：github.com/networkop/xdp-xconnect@v0.0.0-20210308194118-1e1a8482c3bc/pkg/xdp/netlink.go
+//
+// forcing xdpgeneric for veth because https://www.netdevconf.org/0x13/session.html?talk-veth-xdp
+// tuntap also requires this probably for the same reasons
+func xdpFlags(linkType string) int {
+	if linkType == "veth" || linkType == "tuntap" {
+		return 2
+	}
+	return 0 // native xdp (xdpdrv) by default
+}
+```

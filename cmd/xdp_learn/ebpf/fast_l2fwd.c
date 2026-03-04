@@ -84,6 +84,40 @@ SEC("xdp_connect") int xdp_redirect(struct xdp_md *ctx)
     return bpf_redirect_map(&txport_map, ctx->ingress_ifindex, 0);
 }
 
+// 莫：可以参考以下的代码，解析自己想要的ip字段。
+//https://github.com/cilium/ebpf/blob/main/examples/xdp/xdp.c
+/*
+Attempt to parse the IPv4 source address from the packet.
+Returns 0 if there is no IPv4 header field; otherwise returns non-zero.
+*/
+/*
+static __always_inline int parse_ip_src_addr(struct xdp_md *ctx, __u32 *ip_src_addr) {
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+
+	// First, parse the ethernet header.
+	struct ethhdr *eth = data;
+	if ((void *)(eth + 1) > data_end) {
+		return 0;
+	}
+
+	if (eth->h_proto != bpf_htons(ETH_P_IP)) {
+		// The protocol is not IPv4, so we can't parse an IPv4 source address.
+		return 0;
+	}
+
+	// Then parse the IP header.
+	struct iphdr *ip = (void *)(eth + 1);
+	if ((void *)(ip + 1) > data_end) {
+		return 0;
+	}
+
+	// Return the source IP address in network byte order.
+	*ip_src_addr = (__u32)(ip->saddr);
+	return 1;
+}
+*/
+
 SEC("xdp_sock") int xdp_sock_prog(struct xdp_md *ctx)
 {
     struct l2fwd_entry *l2fwd_entry;
